@@ -1,0 +1,64 @@
+package com.thisisme.model.enums;
+
+/**
+ * Audit log action types for UK GDPR compliance (Art 30).
+ */
+public enum AuditAction {
+    // Authentication
+    LOGIN,
+    LOGOUT,
+    LOGIN_FAILED,
+    PASSWORD_CHANGED,
+
+    // Passport operations
+    PASSPORT_CREATED,
+    PASSPORT_VIEWED,
+    PASSPORT_UPDATED,
+    PASSPORT_DELETED,
+
+    // Section operations
+    SECTION_CREATED,
+    SECTION_UPDATED,
+    SECTION_DELETED,
+
+    // Timeline operations
+    TIMELINE_ENTRY_CREATED,
+    TIMELINE_ENTRY_VIEWED,
+    TIMELINE_ENTRY_UPDATED,
+    TIMELINE_ENTRY_DELETED,
+
+    // Document operations
+    DOCUMENT_UPLOADED,
+    DOCUMENT_VIEWED,
+    DOCUMENT_DOWNLOADED,
+    DOCUMENT_DELETED,
+    DOCUMENT_OCR_PROCESSED,
+
+    // Sharing operations
+    SHARE_LINK_CREATED,
+    SHARE_LINK_ACCESSED,
+    SHARE_LINK_REVOKED,
+    PROFESSIONAL_ACCESS_GRANTED,
+    PROFESSIONAL_ACCESS_REVOKED,
+    CO_OWNER_ADDED,
+    CO_OWNER_REMOVED,
+
+    // Consent operations
+    CONSENT_GRANTED,
+    CONSENT_WITHDRAWN,
+
+    // Privacy rights
+    DATA_ACCESS_REQUEST,
+    DATA_EXPORT_REQUESTED,
+    DATA_EXPORT_COMPLETED,
+    DATA_ERASURE_REQUESTED,
+    DATA_ERASURE_COMPLETED,
+    DATA_RECTIFICATION_REQUESTED,
+    DATA_RECTIFICATION_COMPLETED,
+
+    // Admin operations
+    USER_CREATED,
+    USER_UPDATED,
+    USER_DELETED,
+    PERMISSION_CHANGED
+}

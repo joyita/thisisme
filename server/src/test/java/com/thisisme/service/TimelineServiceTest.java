@@ -1,0 +1,316 @@
+package com.thisisme.service;
+
+import com.thisisme.exception.ResourceNotFoundException;
+import com.thisisme.model.dto.TimelineDTO.*;
+import com.thisisme.model.entity.Passport;
+import com.thisisme.model.entity.TimelineEntry;
+import com.thisisme.model.entity.User;
+import com.thisisme.model.enums.EntryType;
+import com.thisisme.model.enums.Role;
+import com.thisisme.model.enums.VisibilityLevel;
+import com.thisisme.repository.PassportRepository;
+import com.thisisme.repository.TimelineEntryRepository;
+import com.thisisme.repository.UserRepository;
+import com.thisisme.security.PermissionEvaluator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class TimelineServiceTest {
+
+    @Mock private TimelineEntryRepository timelineRepository;
+    @Mock private PassportRepository passportRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private PermissionEvaluator permissionEvaluator;
+    @Mock private AuditService auditService;
+    @Mock private AuditService.AuditLogBuilder auditLogBuilder;
+
+    private TimelineService timelineService;
+    private User testUser;
+    private Passport testPassport;
+    private TimelineEntry testEntry;
+
+    @BeforeEach
+    void setUp() {
+        timelineService = new TimelineService(
+            timelineRepository,
+            passportRepository,
+            userRepository,
+            permissionEvaluator,
+            auditService
+        );
+
+        testUser = new User("Test User", "test@example.com", "hashedPassword");
+        ReflectionTestUtils.setField(testUser, "id", UUID.randomUUID());
+
+        testPassport = new Passport("Test Child", testUser);
+        ReflectionTestUtils.setField(testPassport, "id", UUID.randomUUID());
+
+        testEntry = new TimelineEntry(
+            testPassport,
+            testUser,
+            EntryType.MILESTONE,
+            "Test Entry",
+            "Test content",
+            LocalDate.now()
+        );
+        ReflectionTestUtils.setField(testEntry, "id", UUID.randomUUID());
+
+        // Setup audit mock chain
+        lenient().when(auditService.log(any(), any(), any(), any())).thenReturn(auditLogBuilder);
+        lenient().when(auditLogBuilder.withPassport(any(com.thisisme.model.entity.Passport.class))).thenReturn(auditLogBuilder);
+        lenient().when(auditLogBuilder.withPassport(any(UUID.class))).thenReturn(auditLogBuilder);
+        lenient().when(auditLogBuilder.withEntity(any(), any())).thenReturn(auditLogBuilder);
+        lenient().when(auditLogBuilder.withDescription(any())).thenReturn(auditLogBuilder);
+        lenient().when(auditLogBuilder.withDataCategories(any(String[].class))).thenReturn(auditLogBuilder);
+    }
+
+    @Test
+    void createEntry_ShouldCreateEntryWhenUserHasPermission() {
+        CreateTimelineEntryRequest request = new CreateTimelineEntryRequest(
+            EntryType.MILESTONE,
+            "First Steps",
+            "Child took first steps today!",
+            LocalDate.now(),
+            VisibilityLevel.PROFESSIONALS,
+            null,
+            Set.of("development", "motor-skills")
+        );
+
+        when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
+        when(permissionEvaluator.canAddTimelineEntries(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
+        when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> {
+            TimelineEntry e = i.getArgument(0);
+            ReflectionTestUtils.setField(e, "id", UUID.randomUUID());
+            return e;
+        });
+
+        TimelineEntry result = timelineService.createEntry(
+            testPassport.getId(),
+            testUser.getId(),
+            request,
+            "192.168.1.1"
+        );
+
+        assertNotNull(result);
+        assertEquals("First Steps", result.getTitle());
+        assertEquals(EntryType.MILESTONE, result.getEntryType());
+        assertEquals(VisibilityLevel.PROFESSIONALS, result.getVisibilityLevel());
+        assertTrue(result.getTags().contains("development"));
+
+        verify(timelineRepository).save(any(TimelineEntry.class));
+    }
+
+    @Test
+    void createEntry_ShouldThrowWhenUserLacksPermission() {
+        CreateTimelineEntryRequest request = new CreateTimelineEntryRequest(
+            EntryType.NOTE,
+            "Test",
+            "Content",
+            LocalDate.now(),
+            null,
+            null,
+            null
+        );
+
+        when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
+        when(permissionEvaluator.canAddTimelineEntries(testPassport.getId(), testUser.getId())).thenReturn(false);
+
+        assertThrows(SecurityException.class, () ->
+            timelineService.createEntry(testPassport.getId(), testUser.getId(), request, "192.168.1.1")
+        );
+    }
+
+    @Test
+    void getTimelineEntries_ShouldReturnFilteredByVisibility() {
+        TimelineFilterRequest filter = new TimelineFilterRequest(
+            null, null, null, null, null, 0, 20
+        );
+
+        TimelineEntry ownersOnlyEntry = new TimelineEntry(
+            testPassport, testUser, EntryType.MEDICAL, "Medical Note", "Private", LocalDate.now()
+        );
+        ownersOnlyEntry.setVisibilityLevel(VisibilityLevel.OWNERS_ONLY);
+        ReflectionTestUtils.setField(ownersOnlyEntry, "id", UUID.randomUUID());
+
+        TimelineEntry publicEntry = new TimelineEntry(
+            testPassport, testUser, EntryType.MILESTONE, "Public Entry", "Visible to all", LocalDate.now()
+        );
+        publicEntry.setVisibilityLevel(VisibilityLevel.ALL);
+        ReflectionTestUtils.setField(publicEntry, "id", UUID.randomUUID());
+
+        Page<TimelineEntry> page = new PageImpl<>(List.of(ownersOnlyEntry, publicEntry));
+
+        when(permissionEvaluator.canViewTimeline(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.getRole(testPassport.getId(), testUser.getId())).thenReturn(Role.VIEWER);
+        when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
+        when(timelineRepository.findByPassportId(eq(testPassport.getId()), any(Pageable.class))).thenReturn(page);
+        when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
+
+        TimelinePageResponse result = timelineService.getTimelineEntries(
+            testPassport.getId(), testUser.getId(), filter, "192.168.1.1"
+        );
+
+        // Viewer should only see the ALL visibility entry
+        assertEquals(1, result.entries().size());
+        assertEquals("Public Entry", result.entries().get(0).title());
+    }
+
+    @Test
+    void getTimelineEntries_ShouldShowAllForOwner() {
+        TimelineFilterRequest filter = new TimelineFilterRequest(
+            null, null, null, null, null, 0, 20
+        );
+
+        TimelineEntry privateEntry = new TimelineEntry(
+            testPassport, testUser, EntryType.MEDICAL, "Private", "Content", LocalDate.now()
+        );
+        privateEntry.setVisibilityLevel(VisibilityLevel.OWNERS_ONLY);
+        ReflectionTestUtils.setField(privateEntry, "id", UUID.randomUUID());
+
+        Page<TimelineEntry> page = new PageImpl<>(List.of(privateEntry));
+
+        when(permissionEvaluator.canViewTimeline(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.getRole(testPassport.getId(), testUser.getId())).thenReturn(Role.OWNER);
+        when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
+        when(timelineRepository.findByPassportId(eq(testPassport.getId()), any(Pageable.class))).thenReturn(page);
+        when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
+
+        TimelinePageResponse result = timelineService.getTimelineEntries(
+            testPassport.getId(), testUser.getId(), filter, "192.168.1.1"
+        );
+
+        assertEquals(1, result.entries().size());
+        assertEquals("Private", result.entries().get(0).title());
+    }
+
+    @Test
+    void updateEntry_ShouldUpdateWhenUserIsAuthor() {
+        UpdateTimelineEntryRequest request = new UpdateTimelineEntryRequest(
+            "Updated Title",
+            "Updated content",
+            null,
+            null,
+            null,
+            null,
+            null,
+            true
+        );
+
+        when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
+        when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
+        when(permissionEvaluator.isOwner(testPassport.getId(), testUser.getId())).thenReturn(false);
+        when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> i.getArgument(0));
+
+        TimelineEntry result = timelineService.updateEntry(
+            testEntry.getId(), testUser.getId(), request, "192.168.1.1"
+        );
+
+        assertEquals("Updated Title", result.getTitle());
+        assertEquals("Updated content", result.getContent());
+        assertTrue(result.isPinned());
+    }
+
+    @Test
+    void updateEntry_ShouldThrowWhenNotAuthorOrOwner() {
+        User otherUser = new User("Other User", "other@example.com", "hash");
+        ReflectionTestUtils.setField(otherUser, "id", UUID.randomUUID());
+
+        UpdateTimelineEntryRequest request = new UpdateTimelineEntryRequest(
+            "Updated", null, null, null, null, null, null, null
+        );
+
+        when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
+        when(userRepository.findById(otherUser.getId())).thenReturn(Optional.of(otherUser));
+        when(permissionEvaluator.isOwner(testPassport.getId(), otherUser.getId())).thenReturn(false);
+
+        assertThrows(SecurityException.class, () ->
+            timelineService.updateEntry(testEntry.getId(), otherUser.getId(), request, "192.168.1.1")
+        );
+    }
+
+    @Test
+    void deleteEntry_ShouldSoftDeleteEntry() {
+        when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
+        when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
+        when(permissionEvaluator.isOwner(testPassport.getId(), testUser.getId())).thenReturn(false);
+        when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> i.getArgument(0));
+
+        timelineService.deleteEntry(testEntry.getId(), testUser.getId(), "192.168.1.1");
+
+        verify(timelineRepository).save(argThat(entry -> entry.getDeletedAt() != null));
+    }
+
+    @Test
+    void togglePin_ShouldTogglePinStatus() {
+        assertFalse(testEntry.isPinned());
+
+        when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
+        when(permissionEvaluator.isOwner(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> i.getArgument(0));
+
+        TimelineEntry result = timelineService.togglePin(testEntry.getId(), testUser.getId(), "192.168.1.1");
+
+        assertTrue(result.isPinned());
+    }
+
+    @Test
+    void togglePin_ShouldThrowWhenNotOwner() {
+        when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
+        when(permissionEvaluator.isOwner(testPassport.getId(), testUser.getId())).thenReturn(false);
+
+        assertThrows(SecurityException.class, () ->
+            timelineService.togglePin(testEntry.getId(), testUser.getId(), "192.168.1.1")
+        );
+    }
+
+    @Test
+    void getEntriesByType_ShouldFilterByType() {
+        TimelineEntry milestoneEntry = new TimelineEntry(
+            testPassport, testUser, EntryType.MILESTONE, "Milestone", "Content", LocalDate.now()
+        );
+        milestoneEntry.setVisibilityLevel(VisibilityLevel.ALL);
+        ReflectionTestUtils.setField(milestoneEntry, "id", UUID.randomUUID());
+
+        when(permissionEvaluator.canViewTimeline(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.getRole(testPassport.getId(), testUser.getId())).thenReturn(Role.OWNER);
+        when(timelineRepository.findByPassportIdAndType(testPassport.getId(), EntryType.MILESTONE))
+            .thenReturn(List.of(milestoneEntry));
+
+        List<TimelineEntry> result = timelineService.getEntriesByType(
+            testPassport.getId(), testUser.getId(), EntryType.MILESTONE, "192.168.1.1"
+        );
+
+        assertEquals(1, result.size());
+        assertEquals(EntryType.MILESTONE, result.get(0).getEntryType());
+    }
+
+    @Test
+    void getEntry_ShouldThrowWhenEntryDeleted() {
+        testEntry.setDeletedAt(java.time.Instant.now());
+
+        when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
+
+        assertThrows(ResourceNotFoundException.class, () ->
+            timelineService.getEntry(testEntry.getId(), testUser.getId(), "192.168.1.1")
+        );
+    }
+}

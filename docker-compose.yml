@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: thisisme-db
+    environment:
+      POSTGRES_DB: thisisme
+      POSTGRES_USER: thisisme
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-localdev123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thisisme"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for future caching/sessions)
+  redis:
+    image: redis:7-alpine
+    container_name: thisisme-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Java Backend (server)
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: thisisme-server
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: thisisme
+      DB_USERNAME: thisisme
+      DB_PASSWORD: ${DB_PASSWORD:-localdev123}
+      JWT_SECRET: ${JWT_SECRET:-DockerDevSecretKeyMustBeChangedInProduction123456!}
+      CORS_ORIGINS: http://localhost:3000
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-dev}
+      OCR_SERVICE_URL: http://ocr:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Next.js Frontend (ui)
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: thisisme-ui
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+
+  # OCR Microservice
+  ocr:
+    build:
+      context: ./ocr
+      dockerfile: Dockerfile
+    container_name: thisisme-ocr
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  # MinIO (S3-compatible storage for local development)
+  minio:
+    image: minio/minio:latest
+    container_name: thisisme-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

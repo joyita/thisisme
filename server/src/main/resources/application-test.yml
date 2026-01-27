@@ -1,0 +1,33 @@
+# Test profile configuration
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  flyway:
+    enabled: false
+
+app:
+  jwt:
+    secret: TestSecretKeyForUnitTestsOnlyMustBeAtLeast256BitsLong!!
+    access-token-validity-minutes: 5
+    refresh-token-validity-days: 1
+
+  storage:
+    type: local
+    local:
+      path: ./test-uploads
+
+logging:
+  level:
+    com.thisisme: DEBUG
+    org.springframework.security: WARN

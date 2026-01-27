@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/ocr/tests/__pycache__
+/ui/node_modules
+/ui/.next
+/server/target
+*.pyc
+/server/.idea
+/ocr/.idea
+/.idea
+*.iml
+server/mvnw
+server/mvnw.cmd

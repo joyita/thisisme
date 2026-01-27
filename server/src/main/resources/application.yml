@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: thisisme-backend
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:thisisme}
+    username: ${DB_USERNAME:thisisme}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# Application configuration
+app:
+  jwt:
+    # IMPORTANT: Change this in production! Must be at least 256 bits (32 chars)
+    secret: ${JWT_SECRET:ThisIsADevelopmentSecretKeyThatMustBeChangedInProduction123!}
+    access-token-validity-minutes: ${JWT_ACCESS_VALIDITY:15}
+    refresh-token-validity-days: ${JWT_REFRESH_VALIDITY:7}
+
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3001}
+
+  privacy:
+    policy-version: "1.0.0"
+
+  storage:
+    type: ${STORAGE_TYPE:local}
+    local:
+      path: ${STORAGE_PATH:./uploads}
+    s3:
+      bucket: ${S3_BUCKET:}
+      region: ${S3_REGION:eu-west-2}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+
+# Actuator endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# Logging
+logging:
+  level:
+    com.thisisme: ${LOG_LEVEL:INFO}
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

@@ -1,0 +1,694 @@
+// src/lib/api.ts
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
+interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+}
+
+let tokens: AuthTokens | null = null;
+
+// Token management
+export function setTokens(newTokens: AuthTokens) {
+  tokens = newTokens;
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('auth_tokens', JSON.stringify(newTokens));
+  }
+}
+
+export function getTokens(): AuthTokens | null {
+  if (tokens) return tokens;
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('auth_tokens');
+    if (stored) {
+      tokens = JSON.parse(stored);
+      return tokens;
+    }
+  }
+  return null;
+}
+
+export function clearTokens() {
+  tokens = null;
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('auth_tokens');
+  }
+}
+
+function isTokenExpired(): boolean {
+  const t = getTokens();
+  if (!t) return true;
+  return new Date(t.expiresAt) <= new Date();
+}
+
+// API request helper
+async function apiRequest<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const t = getTokens();
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  if (t?.accessToken) {
+    headers['Authorization'] = `Bearer ${t.accessToken}`;
+  }
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (response.status === 401 && t?.refreshToken) {
+    // Try to refresh token
+    const refreshed = await refreshTokens(t.refreshToken);
+    if (refreshed) {
+      headers['Authorization'] = `Bearer ${refreshed.accessToken}`;
+      const retryResponse = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers,
+      });
+      if (!retryResponse.ok) {
+        throw new ApiError(retryResponse.status, await retryResponse.text());
+      }
+      return retryResponse.json();
+    }
+  }
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Request failed' }));
+    throw new ApiError(response.status, error.message || 'Request failed');
+  }
+
+  if (response.status === 204) {
+    return {} as T;
+  }
+
+  return response.json();
+}
+
+async function refreshTokens(refreshToken: string): Promise<AuthTokens | null> {
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const newTokens: AuthTokens = {
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        expiresAt: data.expiresAt,
+      };
+      setTokens(newTokens);
+      return newTokens;
+    }
+  } catch (e) {
+    console.error('Token refresh failed:', e);
+  }
+  clearTokens();
+  return null;
+}
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+// Auth API
+export const authApi = {
+  async register(name: string, email: string, password: string, consentGiven: boolean) {
+    const data = await apiRequest<{
+      accessToken: string;
+      refreshToken: string;
+      expiresAt: string;
+      userId: string;
+      name: string;
+      email: string;
+    }>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password, parentalResponsibilityConfirmed: consentGiven }),
+    });
+    setTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      expiresAt: data.expiresAt,
+    });
+    return data;
+  },
+
+  async login(email: string, password: string) {
+    const data = await apiRequest<{
+      accessToken: string;
+      refreshToken: string;
+      expiresAt: string;
+      userId: string;
+      name: string;
+      email: string;
+    }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    setTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      expiresAt: data.expiresAt,
+    });
+    return data;
+  },
+
+  async logout() {
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST' });
+    } finally {
+      clearTokens();
+    }
+  },
+};
+
+// Passport API
+export const passportApi = {
+  async list() {
+    return apiRequest<PassportListItem[]>('/api/passports');
+  },
+
+  async get(id: string) {
+    return apiRequest<Passport>(`/api/passports/${id}`);
+  },
+
+  async create(childFirstName: string, childDateOfBirth?: string, consentGiven?: boolean) {
+    return apiRequest<Passport>('/api/passports', {
+      method: 'POST',
+      body: JSON.stringify({ childFirstName, childDateOfBirth, consentGiven }),
+    });
+  },
+
+  async update(id: string, updates: { childFirstName?: string; childDateOfBirth?: string; childAvatar?: string }) {
+    return apiRequest<Passport>(`/api/passports/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async addSection(passportId: string, type: string, content: string, visibilityLevel?: string) {
+    return apiRequest<PassportSection>(`/api/passports/${passportId}/sections`, {
+      method: 'POST',
+      body: JSON.stringify({ type, content, visibilityLevel }),
+    });
+  },
+
+  async updateSection(passportId: string, sectionId: string, content: string) {
+    return apiRequest<PassportSection>(`/api/passports/${passportId}/sections/${sectionId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    });
+  },
+
+  async deleteSection(passportId: string, sectionId: string) {
+    return apiRequest<void>(`/api/passports/${passportId}/sections/${sectionId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Timeline API
+export const timelineApi = {
+  async list(passportId: string, page = 0, size = 20) {
+    return apiRequest<TimelinePageResponse>(
+      `/api/passports/${passportId}/timeline?page=${page}&size=${size}`
+    );
+  },
+
+  async create(passportId: string, entry: CreateTimelineEntry) {
+    return apiRequest<TimelineEntry>(`/api/passports/${passportId}/timeline`, {
+      method: 'POST',
+      body: JSON.stringify(entry),
+    });
+  },
+
+  async update(passportId: string, entryId: string, updates: CreateTimelineEntry) {
+    return apiRequest<TimelineEntry>(`/api/passports/${passportId}/timeline/${entryId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async delete(passportId: string, entryId: string) {
+    return apiRequest<void>(`/api/passports/${passportId}/timeline/${entryId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async togglePin(passportId: string, entryId: string) {
+    return apiRequest<TimelineEntry>(`/api/passports/${passportId}/timeline/${entryId}/pin`, {
+      method: 'POST',
+    });
+  },
+};
+
+// Document API
+export const documentApi = {
+  async list(passportId: string) {
+    return apiRequest<DocumentListResponse>(`/api/passports/${passportId}/documents`);
+  },
+
+  async upload(passportId: string, file: File, timelineEntryId?: string) {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (timelineEntryId) {
+      formData.append('timelineEntryId', timelineEntryId);
+    }
+
+    const t = getTokens();
+    const response = await fetch(`${API_BASE}/api/passports/${passportId}/documents`, {
+      method: 'POST',
+      headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, 'Upload failed');
+    }
+
+    return response.json() as Promise<Document>;
+  },
+
+  async getDownloadUrl(passportId: string, documentId: string) {
+    return apiRequest<{ downloadUrl: string }>(
+      `/api/passports/${passportId}/documents/${documentId}/download`
+    );
+  },
+
+  async delete(passportId: string, documentId: string) {
+    return apiRequest<void>(`/api/passports/${passportId}/documents/${documentId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Share API
+export const shareApi = {
+  async list(passportId: string) {
+    return apiRequest<ShareLink[]>(`/api/passports/${passportId}/share`);
+  },
+
+  async create(passportId: string, options: CreateShareLink) {
+    return apiRequest<ShareLink>(`/api/passports/${passportId}/share`, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  },
+
+  async revoke(passportId: string, linkId: string) {
+    return apiRequest<void>(`/api/passports/${passportId}/share/${linkId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Public endpoints
+  async checkAccess(token: string) {
+    const response = await fetch(`${API_BASE}/share/${token}/check`);
+    if (!response.ok) throw new ApiError(response.status, 'Not found');
+    return response.json() as Promise<ShareAccessResponse>;
+  },
+
+  async verifyPassword(token: string, password: string) {
+    const response = await fetch(`${API_BASE}/share/${token}/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    return response.json() as Promise<boolean>;
+  },
+
+  async accessShared(token: string) {
+    const response = await fetch(`${API_BASE}/share/${token}`);
+    if (!response.ok) throw new ApiError(response.status, 'Access denied');
+    return response.json() as Promise<SharedPassport>;
+  },
+};
+
+// Permissions API
+export const permissionsApi = {
+  async list(passportId: string) {
+    return apiRequest<PassportPermissionDetail[]>(`/api/passports/${passportId}/permissions`);
+  },
+
+  async add(passportId: string, request: AddPermissionRequest) {
+    return apiRequest<PassportPermissionDetail>(`/api/passports/${passportId}/permissions`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  async revoke(passportId: string, permissionId: string) {
+    return apiRequest<void>(`/api/passports/${passportId}/permissions/${permissionId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Export API
+export const exportApi = {
+  async downloadJson(passportId: string) {
+    const t = getTokens();
+    const response = await fetch(`${API_BASE}/api/passports/${passportId}/export/json`, {
+      headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
+    });
+    return response.blob();
+  },
+
+  async downloadCsv(passportId: string) {
+    const t = getTokens();
+    const response = await fetch(`${API_BASE}/api/passports/${passportId}/export/csv`, {
+      headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
+    });
+    return response.blob();
+  },
+
+  async downloadMarkdown(passportId: string) {
+    const t = getTokens();
+    const response = await fetch(`${API_BASE}/api/passports/${passportId}/export/markdown`, {
+      headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
+    });
+    return response.blob();
+  },
+
+  async downloadHtml(passportId: string) {
+    const t = getTokens();
+    const response = await fetch(`${API_BASE}/api/passports/${passportId}/export/html`, {
+      headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
+    });
+    return response.blob();
+  },
+};
+
+// Types
+export interface PassportListItem {
+  id: string;
+  childFirstName: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface Passport {
+  id: string;
+  childFirstName: string;
+  childDateOfBirth?: string;
+  photoUrl?: string;
+  childAvatar?: string;
+  wizardComplete?: boolean;
+  sections: Record<string, PassportSection[]>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PassportSection {
+  id: string;
+  type: 'LOVES' | 'HATES' | 'STRENGTHS' | 'NEEDS';
+  content: string;
+  visibilityLevel: string;
+  createdAt: string;
+}
+
+export interface PassportPermission {
+  id: string;
+  userId: string;
+  userName: string;
+  role: string;
+  notes?: string;
+}
+
+export interface TimelineEntry {
+  id: string;
+  passportId: string;
+  author: { id: string; name: string; role: string };
+  entryType: 'INCIDENT' | 'LIKE' | 'DISLIKE' | 'MILESTONE' | 'SUCCESS' | 'NOTE' | 'MEDICAL' | 'EDUCATIONAL';
+  title: string;
+  content: string;
+  entryDate: string;
+  visibilityLevel: string;
+  tags: string[];
+  pinned: boolean;
+  attachmentCount: number;
+  createdAt: string;
+}
+
+export interface CreateTimelineEntry {
+  entryType: string;
+  title: string;
+  content: string;
+  entryDate: string;
+  visibilityLevel?: string;
+  tags?: string[];
+}
+
+export interface TimelinePageResponse {
+  entries: TimelineEntry[];
+  currentPage: number;
+  totalPages: number;
+  totalElements: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface Document {
+  id: string;
+  passportId: string;
+  fileName: string;
+  originalFileName: string;
+  mimeType: string;
+  fileSize: number;
+  hasOcrText: boolean;
+  uploadedAt: string;
+  uploadedBy: { id: string; name: string };
+}
+
+export interface DocumentListResponse {
+  documents: Document[];
+  totalStorageBytes: number;
+  storageQuotaBytes: number;
+}
+
+export interface ShareLink {
+  id: string;
+  token: string;
+  shareUrl: string;
+  label?: string;
+  visibleSections: string[];
+  showTimeline: boolean;
+  showDocuments: boolean;
+  expiresAt?: string;
+  isPasswordProtected: boolean;
+  accessCount: number;
+  lastAccessedAt?: string;
+  createdAt: string;
+  active: boolean;
+}
+
+export interface CreateShareLink {
+  label?: string;
+  visibleSections?: string[];
+  showTimeline?: boolean;
+  showDocuments?: boolean;
+  expiresInDays?: number;
+  password?: string;
+}
+
+export interface ShareAccessResponse {
+  requiresPassword: boolean;
+  isExpired: boolean;
+  passportChildName: string;
+}
+
+export interface SharedPassport {
+  passportId: string;
+  childFirstName: string;
+  childDateOfBirth?: string;
+  sections: { type: string; content: string }[];
+  timelineEntries: { title: string; content: string; entryType: string; entryDate: string }[];
+  documents: { fileName: string; mimeType: string; fileSize: number }[];
+}
+
+// Permission types for API
+export type Role = 'OWNER' | 'CO_PARENT' | 'PROFESSIONAL' | 'VIEWER';
+
+// Matches backend PermissionResponse
+export interface PassportPermissionDetail {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  role: string;
+  canViewTimeline: boolean;
+  canAddTimelineEntries: boolean;
+  canViewDocuments: boolean;
+  canUploadDocuments: boolean;
+  grantedAt: string;
+  notes?: string;
+}
+
+// Matches backend AddPermissionRequest
+export interface AddPermissionRequest {
+  email: string;
+  role: string;
+  notes?: string;
+}
+
+// Collaboration types
+export type ReactionType = 'HEART' | 'CELEBRATE' | 'SUPPORT' | 'THANK' | 'INSIGHT' | 'CONCERN';
+
+export interface Comment {
+  id: string;
+  entryId: string;
+  author: { id: string; name: string; role: string };
+  content: string;
+  mentionedUserIds: string[];
+  createdAt: string;
+  updatedAt?: string;
+  isEdited: boolean;
+}
+
+export interface ReactionSummary {
+  counts: Record<ReactionType, number>;
+  userReactions: ReactionType[];
+}
+
+// Collaboration API
+export const collaborationApi = {
+  // Comments
+  async getComments(entryId: string) {
+    return apiRequest<Comment[]>(`/api/timeline/${entryId}/comments`);
+  },
+
+  async addComment(entryId: string, content: string, mentionedUserIds?: string[]) {
+    return apiRequest<Comment>(`/api/timeline/${entryId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content, mentionedUserIds }),
+    });
+  },
+
+  async updateComment(entryId: string, commentId: string, content: string) {
+    return apiRequest<Comment>(`/api/timeline/${entryId}/comments/${commentId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    });
+  },
+
+  async deleteComment(entryId: string, commentId: string) {
+    return apiRequest<void>(`/api/timeline/${entryId}/comments/${commentId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Reactions
+  async getReactions(entryId: string) {
+    return apiRequest<ReactionSummary>(`/api/timeline/${entryId}/reactions`);
+  },
+
+  async addReaction(entryId: string, reactionType: ReactionType) {
+    return apiRequest<{ id: string }>(`/api/timeline/${entryId}/reactions`, {
+      method: 'POST',
+      body: JSON.stringify({ reactionType }),
+    });
+  },
+
+  async removeReaction(entryId: string, reactionType: ReactionType) {
+    return apiRequest<void>(`/api/timeline/${entryId}/reactions/${reactionType}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Notification types
+export type NotificationType =
+  | 'COMMENT_ON_YOUR_ENTRY'
+  | 'MENTIONED_IN_COMMENT'
+  | 'REACTION_ON_YOUR_ENTRY'
+  | 'PERMISSION_GRANTED'
+  | 'PERMISSION_REVOKED'
+  | 'DOCUMENT_OCR_COMPLETE';
+
+export interface Notification {
+  id: string;
+  notificationType: NotificationType;
+  title: string;
+  message: string;
+  actor?: { id: string; name: string };
+  passportId?: string;
+  timelineEntryId?: string;
+  commentId?: string;
+  documentId?: string;
+  createdAt: string;
+  readAt?: string;
+  isRead: boolean;
+}
+
+export interface NotificationPageResponse {
+  notifications: Notification[];
+  currentPage: number;
+  totalPages: number;
+  totalElements: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export interface NotificationPreference {
+  notificationType: NotificationType;
+  displayName: string;
+  description: string;
+  enabled: boolean;
+}
+
+// Notification API
+export const notificationApi = {
+  async list(page = 0, size = 20) {
+    return apiRequest<NotificationPageResponse>(
+      `/api/notifications?page=${page}&size=${size}`
+    );
+  },
+
+  async getUnreadCount() {
+    return apiRequest<{ count: number }>('/api/notifications/unread/count');
+  },
+
+  async getRecentUnread(limit = 5) {
+    return apiRequest<Notification[]>(`/api/notifications/unread/recent?limit=${limit}`);
+  },
+
+  async markAsRead(notificationId: string) {
+    return apiRequest<void>(`/api/notifications/${notificationId}/read`, {
+      method: 'POST',
+    });
+  },
+
+  async markAsUnread(notificationId: string) {
+    return apiRequest<void>(`/api/notifications/${notificationId}/unread`, {
+      method: 'POST',
+    });
+  },
+
+  async markAllAsRead() {
+    return apiRequest<void>('/api/notifications/read-all', {
+      method: 'POST',
+    });
+  },
+
+  async getPreferences() {
+    return apiRequest<NotificationPreference[]>('/api/notifications/preferences');
+  },
+
+  async updatePreference(notificationType: NotificationType, enabled: boolean) {
+    return apiRequest<void>('/api/notifications/preferences', {
+      method: 'PUT',
+      body: JSON.stringify({ notificationType, enabled }),
+    });
+  },
+};
