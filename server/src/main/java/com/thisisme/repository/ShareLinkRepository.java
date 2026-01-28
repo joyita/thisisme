@@ -16,16 +16,16 @@ public interface ShareLinkRepository extends JpaRepository<ShareLink, UUID> {
 
     Optional<ShareLink> findByToken(String token);
 
-    @Query("SELECT s FROM ShareLink s WHERE s.token = :token " +
+    @Query("SELECT s FROM ShareLink s LEFT JOIN FETCH s.visibleSections WHERE s.token = :token " +
            "AND s.active = true AND (s.expiresAt IS NULL OR s.expiresAt > :now)")
     Optional<ShareLink> findValidByToken(@Param("token") String token, @Param("now") Instant now);
 
-    @Query("SELECT s FROM ShareLink s WHERE s.passport.id = :passportId " +
-           "AND s.active = true ORDER BY s.createdAt DESC")
+    @Query("SELECT DISTINCT s FROM ShareLink s LEFT JOIN FETCH s.visibleSections " +
+           "WHERE s.passport.id = :passportId AND s.active = true ORDER BY s.createdAt DESC")
     List<ShareLink> findActiveByPassportId(@Param("passportId") UUID passportId);
 
-    @Query("SELECT s FROM ShareLink s WHERE s.passport.id = :passportId " +
-           "ORDER BY s.createdAt DESC")
+    @Query("SELECT DISTINCT s FROM ShareLink s LEFT JOIN FETCH s.visibleSections " +
+           "WHERE s.passport.id = :passportId ORDER BY s.createdAt DESC")
     List<ShareLink> findAllByPassportId(@Param("passportId") UUID passportId);
 
     @Query("SELECT s FROM ShareLink s WHERE s.expiresAt IS NOT NULL " +
