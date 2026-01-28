@@ -44,7 +44,7 @@ app:
     refresh-token-validity-days: ${JWT_REFRESH_VALIDITY:7}
 
   cors:
-    allowed-origins: ${CORS_ORIGINS:http://localhost:3001}
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000}
 
   privacy:
     policy-version: "1.0.0"

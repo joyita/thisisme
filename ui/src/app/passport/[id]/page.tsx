@@ -15,6 +15,8 @@ import { TimelineFilters } from '@/components/timeline/TimelineFilters';
 import { TimelineAnalytics } from '@/components/timeline/TimelineAnalytics';
 import { EntryCollaboration } from '@/components/timeline/EntryCollaboration';
 import { PermissionsTab } from '@/components/permissions/PermissionsTab';
+import { ShareLinksTab } from '@/components/sharing/ShareLinksTab';
+import { DocumentsTab } from '@/components/documents/DocumentsTab';
 import { EntryType } from '@/lib/types';
 import { ENTRY_TYPE_CONFIG } from '@/lib/constants';
 import {
@@ -538,64 +540,11 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
         )}
 
         {activeTab === 'documents' && (
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Documents</h2>
-              <Button className="flex items-center gap-2">
-                <MdAdd className="w-5 h-5" />
-                Upload
-              </Button>
-            </div>
-
-            <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-              <MdDescription className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No documents yet</h3>
-              <p className="text-gray-600">Upload medical records, assessments, and reports.</p>
-            </div>
-          </div>
+          <DocumentsTab passportId={currentPassport.id} />
         )}
 
         {activeTab === 'sharing' && (
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Sharing</h2>
-              <Button className="flex items-center gap-2">
-                <MdAdd className="w-5 h-5" />
-                Create Link
-              </Button>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-900 mb-2">Share Links</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Create secure links to share this passport with teachers, therapists, and caregivers.
-                </p>
-                <p className="text-gray-400 text-sm italic">No active share links</p>
-              </div>
-
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="font-semibold text-gray-900 mb-2">Export Data</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Download a copy of this passport for offline use or backup.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
-                    <MdDownload className="w-4 h-4" />
-                    JSON
-                  </button>
-                  <button className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
-                    <MdDownload className="w-4 h-4" />
-                    CSV
-                  </button>
-                  <button className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
-                    <MdDownload className="w-4 h-4" />
-                    PDF
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ShareLinksTab passportId={currentPassport.id} childName={currentPassport.childFirstName} />
         )}
 
         {activeTab === 'permissions' && (

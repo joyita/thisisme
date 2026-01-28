@@ -33,6 +33,7 @@ export function clearTokens() {
   tokens = null;
   if (typeof window !== 'undefined') {
     localStorage.removeItem('auth_tokens');
+    localStorage.removeItem('user_info');
   }
 }
 
@@ -58,12 +59,26 @@ async function apiRequest<T>(
     headers['Authorization'] = `Bearer ${t.accessToken}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-  if (response.status === 401 && t?.refreshToken) {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      throw new ApiError(0, 'Request timed out');
+    }
+    throw new ApiError(0, e.message || 'Network error');
+  }
+  clearTimeout(timeoutId);
+
+  if ((response.status === 401 || response.status === 403) && t?.refreshToken) {
     // Try to refresh token
     const refreshed = await refreshTokens(t.refreshToken);
     if (refreshed) {
