@@ -1,4 +1,4 @@
-<h1 align="center"><img src="icon.svg" alt="" width="28" height="28" align="top"> ThisIsMe</h1>
+<h1 align="center"><img src="icon.svg" alt="" width="32" height="32" style="vertical-align: text-top;"> ThisIsMe</h1>
 
 A care coordination and pupil advocacy platform for children with Special Educational Needs and Disabilities (SEND) to share information to help co-ordinate care. 
 Inspired by Pupil Passports, and the need to harmonise often fragmented care.
