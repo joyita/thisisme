@@ -42,6 +42,10 @@ next-env.d.ts
 /ocr/tests/__pycache__
 /ui/node_modules
 /ui/.next
+/poc/node_modules
+/poc/.next
+/poc/out
+/poc/.idea
 /server/target
 *.pyc
 /server/.idea
