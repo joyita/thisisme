@@ -14,7 +14,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/passports/{passportId}/export")
+@RequestMapping("/api/v1/passports/{passportId}/export")
 public class ExportController {
 
     private final ExportService exportService;

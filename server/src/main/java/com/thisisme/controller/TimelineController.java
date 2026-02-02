@@ -19,7 +19,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/passports/{passportId}/timeline")
+@RequestMapping("/api/v1/passports/{passportId}/timeline")
 public class TimelineController {
 
     private final TimelineService timelineService;

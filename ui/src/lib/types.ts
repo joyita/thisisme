@@ -1,49 +1,31 @@
 // src/lib/types.ts
-export interface User {
-  id: string;
-  username: string;
-  isOwner: boolean;
-}
+export type SectionType = 'LOVES' | 'HATES' | 'STRENGTHS' | 'NEEDS';
 
-export interface Revision {
+export interface SectionRevision {
   id: string;
   content: string;
   remedialSuggestion?: string;
-  authorId: string;
+  changeType: 'EDIT' | 'PUBLISH' | 'UNPUBLISH';
+  authorId?: string;
   authorName: string;
   timestamp: string;
-  status: 'current' | 'pending' | 'approved' | 'rejected';
 }
 
-export interface BulletPoint {
-  id: string;
+export interface PassportRevisionSection {
+  type: string;
   content: string;
-  remedialSuggestion?: string;
-  isPublished: boolean;
-  revisions: Revision[];
-  pendingRevision?: Revision;
-  createdAt: string;
-  updatedAt: string;
-  createdBy: string;
-  lastEditedBy: string;
+  remedialSuggestion: string;
+  published: boolean;
+  visibilityLevel: string;
 }
 
-export type SectionType = 'loves' | 'hates' | 'strengths' | 'needs';
-
-export interface ChildProfile {
-  firstName: string;
-  avatar?: string;
-}
-
-export interface PupilPassport {
+export interface PassportRevision {
   id: string;
-  child: ChildProfile;
-  ownerId: string;
-  ownerName: string;
-  sections: Record<SectionType, BulletPoint[]>;
+  revisionNumber: number;
+  description: string;
+  createdByName: string;
   createdAt: string;
-  updatedAt: string;
-  wizardComplete: boolean;
+  sectionsSnapshot: PassportRevisionSection[];
 }
 
 // Timeline Entry Types

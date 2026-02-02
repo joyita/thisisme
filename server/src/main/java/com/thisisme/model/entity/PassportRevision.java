@@ -1,8 +1,10 @@
 package com.thisisme.model.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Type;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
 
 import java.time.Instant;
 import java.util.UUID;
@@ -34,6 +36,7 @@ public class PassportRevision {
      * JSON snapshot of passport sections at time of revision
      */
     @Column(nullable = false, columnDefinition = "JSONB")
+    @Type(JsonStringType.class)
     private String sectionsSnapshot;
 
     @ManyToOne(fetch = FetchType.LAZY)

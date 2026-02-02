@@ -84,12 +84,12 @@ export default function DashboardPage() {
 
       {/* Main content */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Your Passports</h2>
             <p className="text-gray-600 mt-1">Manage passports for your children</p>
           </div>
-          <Button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2">
+          <Button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 self-start sm:self-auto">
             <MdAdd className="w-5 h-5" />
             New Passport
           </Button>

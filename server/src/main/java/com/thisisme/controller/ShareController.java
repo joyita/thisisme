@@ -26,7 +26,7 @@ public class ShareController {
     /**
      * Create a new share link (authenticated)
      */
-    @PostMapping("/api/passports/{passportId}/share")
+    @PostMapping("/api/v1/passports/{passportId}/share")
     public ResponseEntity<ShareLinkResponse> createShareLink(
             @PathVariable UUID passportId,
             @Valid @RequestBody CreateShareLinkRequest request,
@@ -46,7 +46,7 @@ public class ShareController {
     /**
      * Get all share links for a passport (authenticated)
      */
-    @GetMapping("/api/passports/{passportId}/share")
+    @GetMapping("/api/v1/passports/{passportId}/share")
     public ResponseEntity<List<ShareLinkResponse>> getShareLinks(
             @PathVariable UUID passportId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -63,7 +63,7 @@ public class ShareController {
     /**
      * Revoke a share link (authenticated)
      */
-    @DeleteMapping("/api/passports/{passportId}/share/{linkId}")
+    @DeleteMapping("/api/v1/passports/{passportId}/share/{linkId}")
     public ResponseEntity<Void> revokeShareLink(
             @PathVariable UUID passportId,
             @PathVariable UUID linkId,

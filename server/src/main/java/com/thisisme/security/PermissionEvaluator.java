@@ -77,6 +77,13 @@ public class PermissionEvaluator {
     }
 
     /**
+     * Check if user can publish or unpublish sections (owner only, not co-owner)
+     */
+    public boolean canPublish(UUID passportId, UUID userId) {
+        return permissionRepository.hasAnyRole(passportId, userId, List.of(Role.OWNER));
+    }
+
+    /**
      * Check if user can manage access (invite others)
      */
     public boolean canManageAccess(UUID passportId, UUID userId) {

@@ -35,6 +35,7 @@ public class PassportDTO {
         String createdByName,
         boolean wizardComplete,
         Map<SectionType, List<SectionResponse>> sections,
+        String userRole,
         Instant createdAt,
         Instant updatedAt
     ) {}
@@ -56,6 +57,9 @@ public class PassportDTO {
         boolean published,
         VisibilityLevel visibilityLevel,
         int displayOrder,
+        String createdByName,
+        String lastEditedByName,
+        Integer revisionCount,
         Instant createdAt,
         Instant updatedAt
     ) {}
@@ -73,6 +77,29 @@ public class PassportDTO {
         Boolean published,
         VisibilityLevel visibilityLevel,
         Integer displayOrder
+    ) {}
+
+    public record SectionRevisionResponse(
+        UUID id,
+        String content,
+        String remedialSuggestion,
+        String changeType,
+        UUID authorId,
+        String authorName,
+        Instant timestamp
+    ) {}
+
+    public record RestoreSectionRequest(
+        @NotNull UUID revisionId
+    ) {}
+
+    public record ReorderSectionsRequest(
+        @NotNull List<ReorderItem> items
+    ) {}
+
+    public record ReorderItem(
+        @NotNull UUID sectionId,
+        int displayOrder
     ) {}
 
     public record AddPermissionRequest(

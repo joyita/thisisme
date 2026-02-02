@@ -15,6 +15,16 @@ const mockPassportUpdateSection = jest.fn();
 const mockPassportDeleteSection = jest.fn();
 const mockGetTokens = jest.fn();
 
+// Mock storage module
+jest.mock('@/lib/storage', () => ({
+  cachePassport: jest.fn(),
+  getCachedPassport: jest.fn().mockReturnValue(null),
+  clearPassportCache: jest.fn(),
+  addPendingChange: jest.fn(),
+  getPendingChanges: jest.fn().mockReturnValue([]),
+  clearPendingChanges: jest.fn(),
+}));
+
 // Mock the API module
 jest.mock('@/lib/api', () => ({
   passportApi: {
@@ -76,7 +86,7 @@ function TestComponent() {
 
   const handleUpdateSection = async () => {
     try {
-      await updateSection('test-id', 'section-1', 'Updated content');
+      await updateSection('test-id', 'section-1', { content: 'Updated content' });
     } catch {
       // Error is handled by context
     }
@@ -249,7 +259,7 @@ describe('PassportContext', () => {
       expect(screen.getByTestId('sections')).toHaveTextContent('1');
     });
 
-    expect(mockPassportAddSection).toHaveBeenCalledWith('test-id', 'LOVES', 'Music', undefined);
+    expect(mockPassportAddSection).toHaveBeenCalledWith('test-id', 'LOVES', 'Music', undefined, undefined);
   });
 
   test('updateSection updates section in current passport', async () => {
@@ -294,7 +304,7 @@ describe('PassportContext', () => {
     await user.click(screen.getByText('Update Section'));
 
     await waitFor(() => {
-      expect(mockPassportUpdateSection).toHaveBeenCalledWith('test-id', 'section-1', 'Updated content');
+      expect(mockPassportUpdateSection).toHaveBeenCalledWith('test-id', 'section-1', { content: 'Updated content' });
     });
   });
 

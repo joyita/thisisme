@@ -1,5 +1,7 @@
 package com.thisisme.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thisisme.model.dto.PassportDTO.*;
 import com.thisisme.model.entity.Passport;
 import com.thisisme.model.entity.PassportPermission;
@@ -21,13 +23,15 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/passports")
+@RequestMapping("/api/v1/passports")
 public class PassportController {
 
     private final PassportService passportService;
+    private final ObjectMapper objectMapper;
 
-    public PassportController(PassportService passportService) {
+    public PassportController(PassportService passportService, ObjectMapper objectMapper) {
         this.passportService = passportService;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping
@@ -167,6 +171,7 @@ public class PassportController {
             passport.getCreatedBy().getName(),
             passport.isWizardComplete(),
             sections,
+            "OWNER",  // Only owners can create passports
             passport.getCreatedAt(),
             passport.getUpdatedAt()
         );
@@ -192,6 +197,9 @@ public class PassportController {
             section.isPublished(),
             section.getVisibilityLevel(),
             section.getDisplayOrder(),
+            section.getCreatedBy().getName(),
+            section.getLastEditedBy() != null ? section.getLastEditedBy().getName() : section.getCreatedBy().getName(),
+            0,  // revisionCount not needed for immediate responses, will be populated on full passport fetch
             section.getCreatedAt(),
             section.getUpdatedAt()
         );
@@ -214,12 +222,19 @@ public class PassportController {
     }
 
     private RevisionResponse toRevisionResponse(PassportRevision revision) {
+        JsonNode snapshot;
+        try {
+            snapshot = objectMapper.readTree(revision.getSectionsSnapshot());
+        } catch (Exception e) {
+            snapshot = objectMapper.createArrayNode();
+        }
         return new RevisionResponse(
             revision.getId(),
             revision.getRevisionNumber(),
             revision.getChangeDescription(),
             revision.getCreatedBy().getName(),
-            revision.getCreatedAt()
+            revision.getCreatedAt(),
+            snapshot
         );
     }
 
@@ -236,6 +251,7 @@ public class PassportController {
         int revisionNumber,
         String description,
         String createdByName,
-        java.time.Instant createdAt
+        java.time.Instant createdAt,
+        JsonNode sectionsSnapshot
     ) {}
 }

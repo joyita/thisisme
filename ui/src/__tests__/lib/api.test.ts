@@ -165,7 +165,7 @@ describe('Passport API', () => {
     const result = await passportApi.list();
 
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/passports'),
+      expect.stringContaining('/api/v1/passports'),
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer test-token',
@@ -195,7 +195,7 @@ describe('Passport API', () => {
     const result = await passportApi.create('Charlie', '2020-05-15', true);
 
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/passports'),
+      expect.stringContaining('/api/v1/passports'),
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
@@ -227,7 +227,7 @@ describe('Passport API', () => {
     const result = await passportApi.get('p1');
 
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/passports/p1'),
+      expect.stringContaining('/api/v1/passports/p1'),
       expect.any(Object)
     );
     expect(result.sections).toHaveLength(1);
@@ -248,10 +248,10 @@ describe('Passport API', () => {
       json: () => Promise.resolve(mockSection),
     });
 
-    const result = await passportApi.addSection('p1', 'LOVES', 'Music', 'ALL');
+    const result = await passportApi.addSection('p1', 'LOVES', 'Music', undefined, 'ALL');
 
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/passports/p1/sections'),
+      expect.stringContaining('/api/v1/passports/p1/sections'),
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ type: 'LOVES', content: 'Music', visibilityLevel: 'ALL' }),

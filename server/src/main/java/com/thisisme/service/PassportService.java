@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thisisme.exception.ResourceNotFoundException;
 import com.thisisme.model.dto.PassportDTO.*;
 import com.thisisme.model.entity.*;
+import com.thisisme.model.entity.SectionRevision.ChangeType;
 import com.thisisme.model.enums.*;
 import com.thisisme.repository.*;
 import com.thisisme.security.PermissionEvaluator;
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class PassportService {
     private final PermissionEvaluator permissionEvaluator;
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
+    private final SectionRevisionRepository sectionRevisionRepository;
 
     public PassportService(
             PassportRepository passportRepository,
@@ -36,7 +39,8 @@ public class PassportService {
             AuditService auditService,
             PermissionEvaluator permissionEvaluator,
             ObjectMapper objectMapper,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            SectionRevisionRepository sectionRevisionRepository) {
         this.passportRepository = passportRepository;
         this.permissionRepository = permissionRepository;
         this.userRepository = userRepository;
@@ -45,6 +49,7 @@ public class PassportService {
         this.permissionEvaluator = permissionEvaluator;
         this.objectMapper = objectMapper;
         this.notificationService = notificationService;
+        this.sectionRevisionRepository = sectionRevisionRepository;
     }
 
     @Transactional
@@ -157,6 +162,7 @@ public class PassportService {
             saved.getCreatedBy().getName(),
             saved.isWizardComplete(),
             filteredSections,
+            userRole.name(),
             saved.getCreatedAt(),
             saved.getUpdatedAt()
         );
@@ -189,8 +195,15 @@ public class PassportService {
             section.setVisibilityLevel(request.visibilityLevel());
         }
 
+        long sameTypeCount = passport.getSections().stream()
+            .filter(s -> s.getType() == request.type()).count();
+        section.setDisplayOrder((int) sameTypeCount);
+
         passport.addSection(section);
         passportRepository.save(passport);
+
+        String typeName = request.type().name().charAt(0) + request.type().name().substring(1).toLowerCase();
+        createRevision(passport, userId, "Added item to " + typeName);
 
         auditService.log(AuditAction.SECTION_CREATED, userId, user.getName(), ipAddress)
             .withPassport(passportId)
@@ -223,6 +236,32 @@ public class PassportService {
         // Store old value for audit
         String oldContent = section.getContent();
 
+        // Track content change as EDIT revision before applying
+        boolean contentChanging = request.content() != null && !request.content().equals(section.getContent());
+        boolean remedialChanging = request.remedialSuggestion() != null &&
+            !request.remedialSuggestion().equals(section.getRemedialSuggestion() != null ? section.getRemedialSuggestion() : "");
+        if (contentChanging || remedialChanging) {
+            sectionRevisionRepository.save(new SectionRevision(
+                section, passport,
+                section.getContent(), section.getRemedialSuggestion(),
+                ChangeType.EDIT, user
+            ));
+        }
+
+        // Track publish/unpublish as non-restorable revision
+        boolean publishChanging = request.published() != null && request.published() != section.isPublished();
+        if (publishChanging) {
+            if (!permissionEvaluator.canPublish(passportId, userId)) {
+                throw new SecurityException("Only the passport owner can publish or unpublish sections");
+            }
+            sectionRevisionRepository.save(new SectionRevision(
+                section, passport,
+                section.getContent(), section.getRemedialSuggestion(),
+                request.published() ? ChangeType.PUBLISH : ChangeType.UNPUBLISH,
+                user
+            ));
+        }
+
         if (request.content() != null) {
             section.setContent(request.content());
         }
@@ -241,6 +280,18 @@ public class PassportService {
 
         section.setLastEditedBy(user);
         passportRepository.save(passport);
+
+        if (contentChanging || remedialChanging || publishChanging) {
+            String typeName = section.getType().name().charAt(0) + section.getType().name().substring(1).toLowerCase();
+            StringBuilder desc = new StringBuilder();
+            if (publishChanging) desc.append(request.published() ? "Published" : "Unpublished");
+            if (contentChanging || remedialChanging) {
+                if (desc.length() > 0) desc.append(" and edited");
+                else desc.append("Edited");
+            }
+            desc.append(" item in ").append(typeName);
+            createRevision(passport, userId, desc.toString());
+        }
 
         auditService.log(AuditAction.SECTION_UPDATED, userId, user.getName(), ipAddress)
             .withPassport(passportId)
@@ -272,6 +323,9 @@ public class PassportService {
 
         passport.getSections().remove(section);
         passportRepository.save(passport);
+
+        String typeName = section.getType().name().charAt(0) + section.getType().name().substring(1).toLowerCase();
+        createRevision(passport, userId, "Removed item from " + typeName);
 
         auditService.log(AuditAction.SECTION_DELETED, userId, user.getName(), ipAddress)
             .withPassport(passportId)
@@ -486,7 +540,9 @@ public class PassportService {
             throw new SecurityException("Access denied");
         }
 
-        return passport.getRevisions();
+        List<PassportRevision> revisions = new ArrayList<>(passport.getRevisions());
+        revisions.forEach(r -> Hibernate.initialize(r.getCreatedBy()));
+        return revisions;
     }
 
     /**
@@ -512,6 +568,7 @@ public class PassportService {
             passport.getCreatedBy().getName(),
             passport.isWizardComplete(),
             filteredSections,
+            userRole.name(),
             passport.getCreatedAt(),
             passport.getUpdatedAt()
         );
@@ -526,7 +583,117 @@ public class PassportService {
         };
     }
 
+    @Transactional(readOnly = true)
+    public List<SectionRevisionResponse> getSectionHistory(UUID passportId, UUID sectionId, UUID userId) {
+        Passport passport = passportRepository.findActiveById(passportId)
+            .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
+
+        if (!permissionEvaluator.canView(passportId, userId)) {
+            throw new SecurityException("Access denied");
+        }
+
+        passport.getSections().stream()
+            .filter(s -> s.getId().equals(sectionId))
+            .findFirst()
+            .orElseThrow(() -> new ResourceNotFoundException("Section", sectionId));
+
+        return sectionRevisionRepository.findBySectionIdOrderByCreatedAtDesc(sectionId).stream()
+            .map(r -> new SectionRevisionResponse(
+                r.getId(),
+                r.getContent(),
+                r.getRemedialSuggestion(),
+                r.getChangeType().name(),
+                r.getAuthor().getId(),
+                r.getAuthorName(),
+                r.getCreatedAt()
+            ))
+            .toList();
+    }
+
+    @Transactional
+    public PassportSection restoreSectionRevision(UUID passportId, UUID sectionId, UUID revisionId, UUID userId, String ipAddress) {
+        Passport passport = passportRepository.findActiveById(passportId)
+            .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
+
+        if (!permissionEvaluator.canEdit(passportId, userId)) {
+            throw new SecurityException("Access denied - cannot edit passport");
+        }
+
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+
+        PassportSection section = passport.getSections().stream()
+            .filter(s -> s.getId().equals(sectionId))
+            .findFirst()
+            .orElseThrow(() -> new ResourceNotFoundException("Section", sectionId));
+
+        SectionRevision revision = sectionRevisionRepository.findById(revisionId)
+            .orElseThrow(() -> new ResourceNotFoundException("Revision", revisionId));
+
+        if (!revision.getSection().getId().equals(sectionId)) {
+            throw new IllegalArgumentException("Revision does not belong to this section");
+        }
+        if (revision.getChangeType() != ChangeType.EDIT) {
+            throw new IllegalStateException("Only EDIT revisions can be restored");
+        }
+
+        // Non-destructive: save current state as EDIT revision before overwriting
+        sectionRevisionRepository.save(new SectionRevision(
+            section, passport,
+            section.getContent(), section.getRemedialSuggestion(),
+            ChangeType.EDIT, user
+        ));
+
+        // Apply the old revision's content
+        section.setContent(revision.getContent());
+        section.setRemedialSuggestion(revision.getRemedialSuggestion());
+        section.setLastEditedBy(user);
+        passportRepository.save(passport);
+
+        String typeName = section.getType().name().charAt(0) + section.getType().name().substring(1).toLowerCase();
+        createRevision(passport, userId, "Restored item in " + typeName + " from previous version");
+
+        auditService.log(AuditAction.SECTION_UPDATED, userId, user.getName(), ipAddress)
+            .withPassport(passportId)
+            .withEntity("PassportSection", sectionId)
+            .withDescription("Restored section from revision " + revisionId)
+            .save();
+
+        return section;
+    }
+
+    @Transactional
+    public void reorderSections(UUID passportId, UUID userId, ReorderSectionsRequest request, String ipAddress) {
+        Passport passport = passportRepository.findActiveById(passportId)
+            .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
+
+        if (!permissionEvaluator.canEdit(passportId, userId)) {
+            throw new SecurityException("Access denied - cannot edit passport");
+        }
+
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+
+        Map<UUID, Integer> orderMap = request.items().stream()
+            .collect(Collectors.toMap(ReorderItem::sectionId, ReorderItem::displayOrder));
+
+        for (PassportSection section : passport.getSections()) {
+            Integer newOrder = orderMap.get(section.getId());
+            if (newOrder != null) {
+                section.setDisplayOrder(newOrder);
+            }
+        }
+
+        passportRepository.save(passport);
+
+        auditService.log(AuditAction.SECTION_UPDATED, userId, user.getName(), ipAddress)
+            .withPassport(passportId)
+            .withDescription("Reordered sections")
+            .save();
+    }
+
     private SectionResponse toSectionResponse(PassportSection section) {
+        int revisionCount = (int) sectionRevisionRepository.countBySectionId(section.getId());
         return new SectionResponse(
             section.getId(),
             section.getType(),
@@ -535,6 +702,9 @@ public class PassportService {
             section.isPublished(),
             section.getVisibilityLevel(),
             section.getDisplayOrder(),
+            section.getCreatedBy().getName(),
+            section.getLastEditedBy() != null ? section.getLastEditedBy().getName() : section.getCreatedBy().getName(),
+            revisionCount,
             section.getCreatedAt(),
             section.getUpdatedAt()
         );

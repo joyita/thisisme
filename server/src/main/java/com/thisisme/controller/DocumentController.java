@@ -17,7 +17,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/passports/{passportId}/documents")
+@RequestMapping("/api/v1/passports/{passportId}/documents")
 public class DocumentController {
 
     private final DocumentService documentService;

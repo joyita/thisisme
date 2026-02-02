@@ -36,6 +36,7 @@ class PassportServiceTest {
     @Mock private PermissionEvaluator permissionEvaluator;
     @Mock private AuditService.AuditLogBuilder auditLogBuilder;
     @Mock private NotificationService notificationService;
+    @Mock private SectionRevisionRepository sectionRevisionRepository;
 
     private PassportService passportService;
     private User testUser;
@@ -51,7 +52,7 @@ class PassportServiceTest {
             consentService,
             auditService,
             permissionEvaluator,
-            objectMapper, notificationService
+            objectMapper, notificationService, sectionRevisionRepository
         );
 
         testUser = new User("Test User", "test@example.com", "hashedPassword");

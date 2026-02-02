@@ -1,41 +1,43 @@
 // src/lib/storage.ts
-import { PupilPassport, User } from './types';
+import { Passport } from './api';
 
-const PASSPORT_KEY = 'pupil_passport';
-const USER_KEY = 'pupil_passport_user';
-
-export function savePassport(passport: PupilPassport): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(PASSPORT_KEY, JSON.stringify(passport));
+export interface PendingChange {
+  passportId: string;
+  sectionId?: string;
+  action: 'add' | 'update' | 'delete' | 'reorder';
+  payload: Record<string, unknown>;
 }
 
-export function loadPassport(): PupilPassport | null {
+export function cachePassport(passport: Passport): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(`passport_cache_${passport.id}`, JSON.stringify(passport));
+}
+
+export function getCachedPassport<T>(id: string): T | null {
   if (typeof window === 'undefined') return null;
-  const data = localStorage.getItem(PASSPORT_KEY);
+  const data = localStorage.getItem(`passport_cache_${id}`);
   return data ? JSON.parse(data) : null;
 }
 
-export function clearPassport(): void {
+export function clearPassportCache(id: string): void {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(PASSPORT_KEY);
+  localStorage.removeItem(`passport_cache_${id}`);
 }
 
-export function saveUser(user: User): void {
+export function addPendingChange(change: PendingChange): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  const existing = getPendingChanges();
+  existing.push(change);
+  localStorage.setItem('passport_pending_changes', JSON.stringify(existing));
 }
 
-export function loadUser(): User | null {
-  if (typeof window === 'undefined') return null;
-  const data = localStorage.getItem(USER_KEY);
-  return data ? JSON.parse(data) : null;
+export function getPendingChanges(): PendingChange[] {
+  if (typeof window === 'undefined') return [];
+  const data = localStorage.getItem('passport_pending_changes');
+  return data ? JSON.parse(data) : [];
 }
 
-export function clearUser(): void {
+export function clearPendingChanges(): void {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem('passport_pending_changes');
 }
-
-
-
-

@@ -7,25 +7,25 @@ export const SECTIONS: Record<SectionType, {
   suggestedMax: number;
   requiresRemedial: boolean;
 }> = {
-  loves: {
+  LOVES: {
     title: 'What I Love',
     prompt: 'What makes your child happy? Think about favourite activities, subjects, people, places...',
     suggestedMax: 5,
     requiresRemedial: false,
   },
-  hates: {
+  HATES: {
     title: 'What I Find Difficult',
     prompt: 'What does your child struggle with? For each one, add what helps make it better.',
     suggestedMax: 4,
     requiresRemedial: true,
   },
-  strengths: {
+  STRENGTHS: {
     title: 'What I Am Amazing At',
     prompt: 'Every child has unique strengths. What is your child particularly good at?',
     suggestedMax: 5,
     requiresRemedial: false,
   },
-  needs: {
+  NEEDS: {
     title: 'What I Need Help With',
     prompt: 'Where does your child benefit most from extra support?',
     suggestedMax: 4,
@@ -35,10 +35,10 @@ export const SECTIONS: Record<SectionType, {
 
 export const WIZARD_STEPS = [
   { id: 'child', label: 'About' },
-  { id: 'loves', label: 'Loves' },
-  { id: 'hates', label: 'Difficulties' },
-  { id: 'strengths', label: 'Strengths' },
-  { id: 'needs', label: 'Needs' },
+  { id: 'LOVES', label: 'Loves' },
+  { id: 'HATES', label: 'Difficulties' },
+  { id: 'STRENGTHS', label: 'Strengths' },
+  { id: 'NEEDS', label: 'Needs' },
 ] as const;
 
 // Timeline Entry Type Configuration

@@ -10,14 +10,6 @@ import { SectionType } from '@/lib/types';
 import { Plus, AlertCircle, CheckCircle } from 'lucide-react';
 import { MdFavorite, MdWarning, MdStar, MdHandshake } from 'react-icons/md';
 
-// Map frontend section types to backend API types
-const sectionTypeToApi: Record<SectionType, string> = {
-  loves: 'LOVES',
-  hates: 'HATES',
-  strengths: 'STRENGTHS',
-  needs: 'NEEDS',
-};
-
 // Validation rules
 const VALIDATION = {
   childName: {
@@ -38,7 +30,7 @@ interface ValidationErrors {
 export default function WizardPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { currentPassport, isLoading: passportLoading, createPassport, updatePassport, addSection } = usePassport();
+  const { currentPassport, isLoading: passportLoading, createPassport, updatePassport, addSection, togglePublish } = usePassport();
   const [passportId, setPassportId] = useState<string | null>(null);
 
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
@@ -91,10 +83,8 @@ export default function WizardPage() {
 
   const handleAddBullet = async (section: SectionType, content: string, remedialSuggestion?: string) => {
     if (passportId) {
-      const fullContent = remedialSuggestion
-        ? `${content}\n\n**What helps:** ${remedialSuggestion}`
-        : content;
-      await addSection(passportId, sectionTypeToApi[section], fullContent);
+      const created = await addSection(passportId, section, content, remedialSuggestion);
+      await togglePublish(passportId, created.id, true);
     }
   };
 
@@ -143,10 +133,10 @@ function WizardFlow({
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [newItems, setNewItems] = useState<Record<SectionType, { content: string; remedial: string }[]>>({
-    loves: [{ content: '', remedial: '' }],
-    hates: [{ content: '', remedial: '' }],
-    strengths: [{ content: '', remedial: '' }],
-    needs: [{ content: '', remedial: '' }],
+    LOVES: [{ content: '', remedial: '' }],
+    HATES: [{ content: '', remedial: '' }],
+    STRENGTHS: [{ content: '', remedial: '' }],
+    NEEDS: [{ content: '', remedial: '' }],
   });
 
   const currentStep = WIZARD_STEPS[currentStepIndex];
@@ -329,27 +319,27 @@ function WizardFlow({
   const getSectionIcon = (section: SectionType) => {
     const iconClass = "text-3xl sm:text-4xl";
     switch (section) {
-      case 'loves': return <MdFavorite className={iconClass} />;
-      case 'hates': return <MdWarning className={iconClass} />;
-      case 'strengths': return <MdStar className={iconClass} />;
-      case 'needs': return <MdHandshake className={iconClass} />;
+      case 'LOVES': return <MdFavorite className={iconClass} />;
+      case 'HATES': return <MdWarning className={iconClass} />;
+      case 'STRENGTHS': return <MdStar className={iconClass} />;
+      case 'NEEDS': return <MdHandshake className={iconClass} />;
     }
   };
 
   const getSectionLabel = (section: SectionType, short = false) => {
     if (short) {
       switch (section) {
-        case 'loves': return 'Loves';
-        case 'hates': return 'Hates';
-        case 'strengths': return 'Strong';
-        case 'needs': return 'Needs';
+        case 'LOVES': return 'Loves';
+        case 'HATES': return 'Hates';
+        case 'STRENGTHS': return 'Strong';
+        case 'NEEDS': return 'Needs';
       }
     }
     switch (section) {
-      case 'loves': return 'Loves';
-      case 'hates': return 'Difficulties';
-      case 'strengths': return 'Strengths';
-      case 'needs': return 'Needs';
+      case 'LOVES': return 'Loves';
+      case 'HATES': return 'Difficulties';
+      case 'STRENGTHS': return 'Strengths';
+      case 'NEEDS': return 'Needs';
     }
   };
 

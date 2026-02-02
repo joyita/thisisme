@@ -42,7 +42,7 @@ public class Passport {
     private User createdBy;
 
     @OneToMany(mappedBy = "passport", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("type, createdAt")
+    @OrderBy("type ASC, displayOrder ASC, createdAt ASC")
     private List<PassportSection> sections = new ArrayList<>();
 
     @OneToMany(mappedBy = "passport", cascade = CascadeType.ALL, orphanRemoval = true)

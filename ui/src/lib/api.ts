@@ -1,4 +1,6 @@
 // src/lib/api.ts
+import { SectionRevision, PassportRevision } from './types';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 interface AuthTokens {
@@ -191,45 +193,67 @@ export const authApi = {
 // Passport API
 export const passportApi = {
   async list() {
-    return apiRequest<PassportListItem[]>('/api/passports');
+    return apiRequest<PassportListItem[]>('/api/v1/passports');
   },
 
   async get(id: string) {
-    return apiRequest<Passport>(`/api/passports/${id}`);
+    return apiRequest<Passport>(`/api/v1/passports/${id}`);
   },
 
   async create(childFirstName: string, childDateOfBirth?: string, consentGiven?: boolean) {
-    return apiRequest<Passport>('/api/passports', {
+    return apiRequest<Passport>('/api/v1/passports', {
       method: 'POST',
       body: JSON.stringify({ childFirstName, childDateOfBirth, consentGiven }),
     });
   },
 
   async update(id: string, updates: { childFirstName?: string; childDateOfBirth?: string; childAvatar?: string }) {
-    return apiRequest<Passport>(`/api/passports/${id}`, {
+    return apiRequest<Passport>(`/api/v1/passports/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
   },
 
-  async addSection(passportId: string, type: string, content: string, visibilityLevel?: string) {
-    return apiRequest<PassportSection>(`/api/passports/${passportId}/sections`, {
+  async addSection(passportId: string, type: string, content: string, remedialSuggestion?: string, visibilityLevel?: string) {
+    return apiRequest<PassportSection>(`/api/v1/passports/${passportId}/sections`, {
       method: 'POST',
-      body: JSON.stringify({ type, content, visibilityLevel }),
+      body: JSON.stringify({ type, content, remedialSuggestion, visibilityLevel }),
     });
   },
 
-  async updateSection(passportId: string, sectionId: string, content: string) {
-    return apiRequest<PassportSection>(`/api/passports/${passportId}/sections/${sectionId}`, {
+  async updateSection(passportId: string, sectionId: string, updates: { content?: string; remedialSuggestion?: string; published?: boolean; displayOrder?: number }) {
+    return apiRequest<PassportSection>(`/api/v1/passports/${passportId}/sections/${sectionId}`, {
       method: 'PUT',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(updates),
     });
   },
 
   async deleteSection(passportId: string, sectionId: string) {
-    return apiRequest<void>(`/api/passports/${passportId}/sections/${sectionId}`, {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/sections/${sectionId}`, {
       method: 'DELETE',
     });
+  },
+
+  async getSectionHistory(passportId: string, sectionId: string) {
+    return apiRequest<SectionRevision[]>(`/api/v2/passports/${passportId}/sections/${sectionId}/history`);
+  },
+
+  async restoreSection(passportId: string, sectionId: string, revisionId: string) {
+    return apiRequest<PassportSection>(`/api/v2/passports/${passportId}/sections/${sectionId}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ revisionId }),
+    });
+  },
+
+  async reorderSections(passportId: string, items: { sectionId: string; displayOrder: number }[]) {
+    return apiRequest<void>(`/api/v2/passports/${passportId}/sections/reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify({ items }),
+    });
+  },
+
+  async getPassportHistory(passportId: string) {
+    return apiRequest<PassportRevision[]>(`/api/v1/passports/${passportId}/history`);
   },
 };
 
@@ -237,32 +261,32 @@ export const passportApi = {
 export const timelineApi = {
   async list(passportId: string, page = 0, size = 20) {
     return apiRequest<TimelinePageResponse>(
-      `/api/passports/${passportId}/timeline?page=${page}&size=${size}`
+      `/api/v1/passports/${passportId}/timeline?page=${page}&size=${size}`
     );
   },
 
   async create(passportId: string, entry: CreateTimelineEntry) {
-    return apiRequest<TimelineEntry>(`/api/passports/${passportId}/timeline`, {
+    return apiRequest<TimelineEntry>(`/api/v1/passports/${passportId}/timeline`, {
       method: 'POST',
       body: JSON.stringify(entry),
     });
   },
 
   async update(passportId: string, entryId: string, updates: CreateTimelineEntry) {
-    return apiRequest<TimelineEntry>(`/api/passports/${passportId}/timeline/${entryId}`, {
+    return apiRequest<TimelineEntry>(`/api/v1/passports/${passportId}/timeline/${entryId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
   },
 
   async delete(passportId: string, entryId: string) {
-    return apiRequest<void>(`/api/passports/${passportId}/timeline/${entryId}`, {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/timeline/${entryId}`, {
       method: 'DELETE',
     });
   },
 
   async togglePin(passportId: string, entryId: string) {
-    return apiRequest<TimelineEntry>(`/api/passports/${passportId}/timeline/${entryId}/pin`, {
+    return apiRequest<TimelineEntry>(`/api/v1/passports/${passportId}/timeline/${entryId}/pin`, {
       method: 'POST',
     });
   },
@@ -271,7 +295,7 @@ export const timelineApi = {
 // Document API
 export const documentApi = {
   async list(passportId: string) {
-    return apiRequest<DocumentListResponse>(`/api/passports/${passportId}/documents`);
+    return apiRequest<DocumentListResponse>(`/api/v1/passports/${passportId}/documents`);
   },
 
   async upload(passportId: string, file: File, timelineEntryId?: string) {
@@ -282,7 +306,7 @@ export const documentApi = {
     }
 
     const t = getTokens();
-    const response = await fetch(`${API_BASE}/api/passports/${passportId}/documents`, {
+    const response = await fetch(`${API_BASE}/api/v1/passports/${passportId}/documents`, {
       method: 'POST',
       headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
       body: formData,
@@ -297,12 +321,12 @@ export const documentApi = {
 
   async getDownloadUrl(passportId: string, documentId: string) {
     return apiRequest<{ downloadUrl: string }>(
-      `/api/passports/${passportId}/documents/${documentId}/download`
+      `/api/v1/passports/${passportId}/documents/${documentId}/download`
     );
   },
 
   async delete(passportId: string, documentId: string) {
-    return apiRequest<void>(`/api/passports/${passportId}/documents/${documentId}`, {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/documents/${documentId}`, {
       method: 'DELETE',
     });
   },
@@ -311,18 +335,18 @@ export const documentApi = {
 // Share API
 export const shareApi = {
   async list(passportId: string) {
-    return apiRequest<ShareLink[]>(`/api/passports/${passportId}/share`);
+    return apiRequest<ShareLink[]>(`/api/v1/passports/${passportId}/share`);
   },
 
   async create(passportId: string, options: CreateShareLink) {
-    return apiRequest<ShareLink>(`/api/passports/${passportId}/share`, {
+    return apiRequest<ShareLink>(`/api/v1/passports/${passportId}/share`, {
       method: 'POST',
       body: JSON.stringify(options),
     });
   },
 
   async revoke(passportId: string, linkId: string) {
-    return apiRequest<void>(`/api/passports/${passportId}/share/${linkId}`, {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/share/${linkId}`, {
       method: 'DELETE',
     });
   },
@@ -353,18 +377,18 @@ export const shareApi = {
 // Permissions API
 export const permissionsApi = {
   async list(passportId: string) {
-    return apiRequest<PassportPermissionDetail[]>(`/api/passports/${passportId}/permissions`);
+    return apiRequest<PassportPermissionDetail[]>(`/api/v1/passports/${passportId}/permissions`);
   },
 
   async add(passportId: string, request: AddPermissionRequest) {
-    return apiRequest<PassportPermissionDetail>(`/api/passports/${passportId}/permissions`, {
+    return apiRequest<PassportPermissionDetail>(`/api/v1/passports/${passportId}/permissions`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
   },
 
   async revoke(passportId: string, permissionId: string) {
-    return apiRequest<void>(`/api/passports/${passportId}/permissions/${permissionId}`, {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/permissions/${permissionId}`, {
       method: 'DELETE',
     });
   },
@@ -374,7 +398,7 @@ export const permissionsApi = {
 export const exportApi = {
   async downloadJson(passportId: string) {
     const t = getTokens();
-    const response = await fetch(`${API_BASE}/api/passports/${passportId}/export/json`, {
+    const response = await fetch(`${API_BASE}/api/v1/passports/${passportId}/export/json`, {
       headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
     });
     return response.blob();
@@ -382,7 +406,7 @@ export const exportApi = {
 
   async downloadCsv(passportId: string) {
     const t = getTokens();
-    const response = await fetch(`${API_BASE}/api/passports/${passportId}/export/csv`, {
+    const response = await fetch(`${API_BASE}/api/v1/passports/${passportId}/export/csv`, {
       headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
     });
     return response.blob();
@@ -390,7 +414,7 @@ export const exportApi = {
 
   async downloadMarkdown(passportId: string) {
     const t = getTokens();
-    const response = await fetch(`${API_BASE}/api/passports/${passportId}/export/markdown`, {
+    const response = await fetch(`${API_BASE}/api/v1/passports/${passportId}/export/markdown`, {
       headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
     });
     return response.blob();
@@ -398,7 +422,7 @@ export const exportApi = {
 
   async downloadHtml(passportId: string) {
     const t = getTokens();
-    const response = await fetch(`${API_BASE}/api/passports/${passportId}/export/html`, {
+    const response = await fetch(`${API_BASE}/api/v1/passports/${passportId}/export/html`, {
       headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
     });
     return response.blob();
@@ -419,8 +443,11 @@ export interface Passport {
   childDateOfBirth?: string;
   photoUrl?: string;
   childAvatar?: string;
+  createdById: string;
+  createdByName: string;
   wizardComplete?: boolean;
   sections: Record<string, PassportSection[]>;
+  userRole?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -429,9 +456,18 @@ export interface PassportSection {
   id: string;
   type: 'LOVES' | 'HATES' | 'STRENGTHS' | 'NEEDS';
   content: string;
+  remedialSuggestion?: string;
+  published: boolean;
   visibilityLevel: string;
+  displayOrder: number;
+  createdByName: string;
+  lastEditedByName: string;
+  revisionCount?: number;
   createdAt: string;
+  updatedAt: string;
 }
+
+export type { SectionRevision, PassportRevision } from './types';
 
 export interface PassportPermission {
   id: string;
