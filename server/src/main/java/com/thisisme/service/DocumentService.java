@@ -247,6 +247,11 @@ public class DocumentService {
     public String getDownloadUrl(UUID documentId, UUID userId, String ipAddress) {
         Document document = getDocument(documentId, userId, ipAddress);
 
+        UUID passportId = document.getPassport().getId();
+        if (!permissionEvaluator.canDownloadDocuments(passportId, userId)) {
+            throw new SecurityException("You don't have permission to download documents");
+        }
+
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -270,11 +275,10 @@ public class DocumentService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // Only uploaders or owners can delete
         boolean isUploader = document.getUploadedBy().getId().equals(userId);
-        boolean isOwner = permissionEvaluator.isOwner(passportId, userId);
+        boolean canDelete = permissionEvaluator.canDeleteDocuments(passportId, userId);
 
-        if (!isUploader && !isOwner) {
+        if (!isUploader && !canDelete) {
             throw new SecurityException("You don't have permission to delete this document");
         }
 

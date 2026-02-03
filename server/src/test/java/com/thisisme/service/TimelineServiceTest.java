@@ -96,14 +96,18 @@ class TimelineServiceTest {
 
         when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
         when(permissionEvaluator.canAddTimelineEntries(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.getRole(testPassport.getId(), testUser.getId())).thenReturn(Role.OWNER);
+        when(permissionEvaluator.getRole(testPassport.getId(), testUser.getId())).thenReturn(Role.OWNER);
         when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
         when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> {
             TimelineEntry e = i.getArgument(0);
             ReflectionTestUtils.setField(e, "id", UUID.randomUUID());
+            ReflectionTestUtils.setField(e, "createdAt", java.time.Instant.now());
+            ReflectionTestUtils.setField(e, "updatedAt", java.time.Instant.now());
             return e;
         });
 
-        TimelineEntry result = timelineService.createEntry(
+        TimelineEntryResponse result = timelineService.createEntry(
             testPassport.getId(),
             testUser.getId(),
             request,
@@ -111,10 +115,10 @@ class TimelineServiceTest {
         );
 
         assertNotNull(result);
-        assertEquals("First Steps", result.getTitle());
-        assertEquals(EntryType.MILESTONE, result.getEntryType());
-        assertEquals(VisibilityLevel.PROFESSIONALS, result.getVisibilityLevel());
-        assertTrue(result.getTags().contains("development"));
+        assertEquals("First Steps", result.title());
+        assertEquals(EntryType.MILESTONE, result.entryType());
+        assertEquals(VisibilityLevel.PROFESSIONALS, result.visibilityLevel());
+        assertTrue(result.tags().contains("development"));
 
         verify(timelineRepository).save(any(TimelineEntry.class));
     }
@@ -150,12 +154,16 @@ class TimelineServiceTest {
         );
         ownersOnlyEntry.setVisibilityLevel(VisibilityLevel.OWNERS_ONLY);
         ReflectionTestUtils.setField(ownersOnlyEntry, "id", UUID.randomUUID());
+        ReflectionTestUtils.setField(ownersOnlyEntry, "createdAt", java.time.Instant.now());
+        ReflectionTestUtils.setField(ownersOnlyEntry, "updatedAt", java.time.Instant.now());
 
         TimelineEntry publicEntry = new TimelineEntry(
             testPassport, testUser, EntryType.MILESTONE, "Public Entry", "Visible to all", LocalDate.now()
         );
         publicEntry.setVisibilityLevel(VisibilityLevel.ALL);
         ReflectionTestUtils.setField(publicEntry, "id", UUID.randomUUID());
+        ReflectionTestUtils.setField(publicEntry, "createdAt", java.time.Instant.now());
+        ReflectionTestUtils.setField(publicEntry, "updatedAt", java.time.Instant.now());
 
         Page<TimelineEntry> page = new PageImpl<>(List.of(ownersOnlyEntry, publicEntry));
 
@@ -185,6 +193,8 @@ class TimelineServiceTest {
         );
         privateEntry.setVisibilityLevel(VisibilityLevel.OWNERS_ONLY);
         ReflectionTestUtils.setField(privateEntry, "id", UUID.randomUUID());
+        ReflectionTestUtils.setField(privateEntry, "createdAt", java.time.Instant.now());
+        ReflectionTestUtils.setField(privateEntry, "updatedAt", java.time.Instant.now());
 
         Page<TimelineEntry> page = new PageImpl<>(List.of(privateEntry));
 
@@ -217,16 +227,22 @@ class TimelineServiceTest {
 
         when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
         when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
-        when(permissionEvaluator.isOwner(testPassport.getId(), testUser.getId())).thenReturn(false);
-        when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> i.getArgument(0));
+        when(permissionEvaluator.canEditTimelineEntries(testPassport.getId(), testUser.getId())).thenReturn(false);
+        when(permissionEvaluator.getRole(testPassport.getId(), testUser.getId())).thenReturn(Role.OWNER);
+        when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> {
+            TimelineEntry e = i.getArgument(0);
+            ReflectionTestUtils.setField(e, "createdAt", java.time.Instant.now());
+            ReflectionTestUtils.setField(e, "updatedAt", java.time.Instant.now());
+            return e;
+        });
 
-        TimelineEntry result = timelineService.updateEntry(
+        TimelineEntryResponse result = timelineService.updateEntry(
             testEntry.getId(), testUser.getId(), request, "192.168.1.1"
         );
 
-        assertEquals("Updated Title", result.getTitle());
-        assertEquals("Updated content", result.getContent());
-        assertTrue(result.isPinned());
+        assertEquals("Updated Title", result.title());
+        assertEquals("Updated content", result.content());
+        assertTrue(result.pinned());
     }
 
     @Test
@@ -240,7 +256,7 @@ class TimelineServiceTest {
 
         when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
         when(userRepository.findById(otherUser.getId())).thenReturn(Optional.of(otherUser));
-        when(permissionEvaluator.isOwner(testPassport.getId(), otherUser.getId())).thenReturn(false);
+        when(permissionEvaluator.canEditTimelineEntries(testPassport.getId(), otherUser.getId())).thenReturn(false);
 
         assertThrows(SecurityException.class, () ->
             timelineService.updateEntry(testEntry.getId(), otherUser.getId(), request, "192.168.1.1")
@@ -251,7 +267,7 @@ class TimelineServiceTest {
     void deleteEntry_ShouldSoftDeleteEntry() {
         when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
         when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
-        when(permissionEvaluator.isOwner(testPassport.getId(), testUser.getId())).thenReturn(false);
+        when(permissionEvaluator.canDeleteTimelineEntries(testPassport.getId(), testUser.getId())).thenReturn(false);
         when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> i.getArgument(0));
 
         timelineService.deleteEntry(testEntry.getId(), testUser.getId(), "192.168.1.1");
@@ -265,11 +281,17 @@ class TimelineServiceTest {
 
         when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
         when(permissionEvaluator.isOwner(testPassport.getId(), testUser.getId())).thenReturn(true);
-        when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> i.getArgument(0));
+        when(permissionEvaluator.getRole(testPassport.getId(), testUser.getId())).thenReturn(Role.OWNER);
+        when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> {
+            TimelineEntry e = i.getArgument(0);
+            ReflectionTestUtils.setField(e, "createdAt", java.time.Instant.now());
+            ReflectionTestUtils.setField(e, "updatedAt", java.time.Instant.now());
+            return e;
+        });
 
-        TimelineEntry result = timelineService.togglePin(testEntry.getId(), testUser.getId(), "192.168.1.1");
+        TimelineEntryResponse result = timelineService.togglePin(testEntry.getId(), testUser.getId(), "192.168.1.1");
 
-        assertTrue(result.isPinned());
+        assertTrue(result.pinned());
     }
 
     @Test
@@ -289,18 +311,20 @@ class TimelineServiceTest {
         );
         milestoneEntry.setVisibilityLevel(VisibilityLevel.ALL);
         ReflectionTestUtils.setField(milestoneEntry, "id", UUID.randomUUID());
+        ReflectionTestUtils.setField(milestoneEntry, "createdAt", java.time.Instant.now());
+        ReflectionTestUtils.setField(milestoneEntry, "updatedAt", java.time.Instant.now());
 
         when(permissionEvaluator.canViewTimeline(testPassport.getId(), testUser.getId())).thenReturn(true);
         when(permissionEvaluator.getRole(testPassport.getId(), testUser.getId())).thenReturn(Role.OWNER);
         when(timelineRepository.findByPassportIdAndType(testPassport.getId(), EntryType.MILESTONE))
             .thenReturn(List.of(milestoneEntry));
 
-        List<TimelineEntry> result = timelineService.getEntriesByType(
+        List<TimelineEntryResponse> result = timelineService.getEntriesByType(
             testPassport.getId(), testUser.getId(), EntryType.MILESTONE, "192.168.1.1"
         );
 
         assertEquals(1, result.size());
-        assertEquals(EntryType.MILESTONE, result.get(0).getEntryType());
+        assertEquals(EntryType.MILESTONE, result.get(0).entryType());
     }
 
     @Test

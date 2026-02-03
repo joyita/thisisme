@@ -30,6 +30,8 @@ public class PassportService {
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
     private final SectionRevisionRepository sectionRevisionRepository;
+    private final InvitationService invitationService;
+    private final CustomRoleService customRoleService;
 
     public PassportService(
             PassportRepository passportRepository,
@@ -40,7 +42,9 @@ public class PassportService {
             PermissionEvaluator permissionEvaluator,
             ObjectMapper objectMapper,
             NotificationService notificationService,
-            SectionRevisionRepository sectionRevisionRepository) {
+            SectionRevisionRepository sectionRevisionRepository,
+            InvitationService invitationService,
+            CustomRoleService customRoleService) {
         this.passportRepository = passportRepository;
         this.permissionRepository = permissionRepository;
         this.userRepository = userRepository;
@@ -50,6 +54,8 @@ public class PassportService {
         this.objectMapper = objectMapper;
         this.notificationService = notificationService;
         this.sectionRevisionRepository = sectionRevisionRepository;
+        this.invitationService = invitationService;
+        this.customRoleService = customRoleService;
     }
 
     @Transactional
@@ -162,7 +168,7 @@ public class PassportService {
             saved.getCreatedBy().getName(),
             saved.isWizardComplete(),
             filteredSections,
-            userRole.name(),
+            userRole.toApiName(),
             saved.getCreatedAt(),
             saved.getUpdatedAt()
         );
@@ -174,8 +180,8 @@ public class PassportService {
         Passport passport = passportRepository.findActiveById(passportId)
             .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
 
-        if (!permissionEvaluator.canEdit(passportId, userId)) {
-            throw new SecurityException("Access denied - cannot edit passport");
+        if (!permissionEvaluator.canEditSections(passportId, userId)) {
+            throw new SecurityException("Access denied - cannot edit sections");
         }
 
         User user = userRepository.findById(userId)
@@ -221,8 +227,8 @@ public class PassportService {
         Passport passport = passportRepository.findActiveById(passportId)
             .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
 
-        if (!permissionEvaluator.canEdit(passportId, userId)) {
-            throw new SecurityException("Access denied - cannot edit passport");
+        if (!permissionEvaluator.canEditSections(passportId, userId)) {
+            throw new SecurityException("Access denied - cannot edit sections");
         }
 
         User user = userRepository.findById(userId)
@@ -309,8 +315,8 @@ public class PassportService {
         Passport passport = passportRepository.findActiveById(passportId)
             .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
 
-        if (!permissionEvaluator.canEdit(passportId, userId)) {
-            throw new SecurityException("Access denied - cannot edit passport");
+        if (!permissionEvaluator.canDeleteSections(passportId, userId)) {
+            throw new SecurityException("Access denied - cannot delete sections");
         }
 
         User user = userRepository.findById(userId)
@@ -334,6 +340,11 @@ public class PassportService {
             .save();
     }
 
+    /**
+     * Adds a permission or creates a pending invitation.
+     * If the email belongs to a registered user, permission is granted immediately.
+     * If not, an invitation is created and an email is sent.
+     */
     @Transactional
     public PermissionResponse addPermission(UUID passportId, UUID userId, AddPermissionRequest request,
                                             String ipAddress) {
@@ -347,19 +358,32 @@ public class PassportService {
         User granter = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
-        User targetUser = userRepository.findByEmail(request.email())
-            .orElseThrow(() -> new IllegalArgumentException("User not found with email: " + request.email()));
+        String normalizedEmail = request.email().trim().toLowerCase();
+        Optional<User> targetUser = userRepository.findByEmail(normalizedEmail);
 
-        // Check if permission already exists
-        Optional<PassportPermission> existing = permissionRepository.findActivePermission(passportId, targetUser.getId());
+        // No account exists — create a pending invitation instead
+        if (targetUser.isEmpty()) {
+            invitationService.createInvitation(passportId, userId, normalizedEmail, request.role(), request.notes(), request.customRoleId(), ipAddress);
+            // Return a sentinel response indicating pending status; controller wraps this
+            return null;
+        }
+
+        // User exists — check for duplicate permission
+        Optional<PassportPermission> existing = permissionRepository.findActivePermission(passportId, targetUser.get().getId());
         if (existing.isPresent()) {
             throw new IllegalStateException("User already has access to this passport");
         }
 
-        Role role = Role.valueOf(request.role().toUpperCase());
-        PassportPermission permission = new PassportPermission(passport, targetUser, role, granter);
+        Role role = Role.fromString(request.role());
+        PassportPermission permission = new PassportPermission(passport, targetUser.get(), role, granter);
         if (request.notes() != null) {
             permission.setNotes(request.notes());
+        }
+
+        // If a custom role was specified, copy its flags over the role defaults
+        if (request.customRoleId() != null) {
+            com.thisisme.model.entity.CustomRole customRole = customRoleService.getCustomRole(passportId, request.customRoleId());
+            permission.applyFromCustomRole(customRole);
         }
 
         PassportPermission saved = permissionRepository.save(permission);
@@ -370,36 +394,22 @@ public class PassportService {
         auditService.log(action, userId, granter.getName(), ipAddress)
             .withPassport(passportId)
             .withEntity("PassportPermission", saved.getId())
-            .withDescription("Granted " + role + " access to " + targetUser.getEmail())
+            .withDescription("Granted " + role + " access to " + targetUser.get().getEmail())
             .save();
 
-        // Send notification to the user who was granted access
         try {
             notificationService.notifyPermissionGranted(
-                targetUser.getId(),
+                targetUser.get().getId(),
                 granter,
                 passportId,
                 passport.getChildFirstName(),
-                role.name()
+                role.toApiName()
             );
         } catch (Exception e) {
             logger.warn("Failed to send permission granted notification: {}", e.getMessage());
         }
 
-        // Return DTO to avoid LazyInitializationException
-        return new PermissionResponse(
-            saved.getId(),
-            targetUser.getId(),
-            targetUser.getName(),
-            targetUser.getEmail(),
-            saved.getRole().name(),
-            saved.canViewTimeline(),
-            saved.canAddTimelineEntries(),
-            saved.canViewDocuments(),
-            saved.canUploadDocuments(),
-            saved.getGrantedAt(),
-            saved.getNotes()
-        );
+        return toPermissionResponse(saved);
     }
 
     @Transactional
@@ -461,20 +471,95 @@ public class PassportService {
         }
 
         return permissionRepository.findActiveByPassportId(passportId).stream()
-            .map(p -> new PermissionResponse(
-                p.getId(),
-                p.getUser().getId(),
-                p.getUser().getName(),
-                p.getUser().getEmail(),
-                p.getRole().name(),
-                p.canViewTimeline(),
-                p.canAddTimelineEntries(),
-                p.canViewDocuments(),
-                p.canUploadDocuments(),
-                p.getGrantedAt(),
-                p.getNotes()
-            ))
+            .map(this::toPermissionResponse)
             .toList();
+    }
+
+    @Transactional
+    public PermissionResponse updatePermission(UUID passportId, UUID permissionId, UUID userId,
+                                               UpdatePermissionRequest request, String ipAddress) {
+        if (!permissionEvaluator.canManageAccess(passportId, userId)) {
+            throw new SecurityException("Access denied - cannot manage permissions");
+        }
+
+        User updater = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+
+        PassportPermission permission = permissionRepository.findById(permissionId)
+            .orElseThrow(() -> new ResourceNotFoundException("Permission", permissionId));
+
+        if (!permission.getPassport().getId().equals(passportId)) {
+            throw new IllegalArgumentException("Permission does not belong to this passport");
+        }
+
+        if (permission.getRole() == Role.OWNER) {
+            throw new IllegalStateException("Cannot modify owner permissions");
+        }
+
+        // Apply each non-null field
+        if (request.canViewPassport() != null)           permission.setCanViewPassport(request.canViewPassport());
+        if (request.canEditPassport() != null)           permission.setCanEditPassport(request.canEditPassport());
+        if (request.canDeletePassport() != null)         permission.setCanDeletePassport(request.canDeletePassport());
+        if (request.canManagePermissions() != null)      permission.setCanManagePermissions(request.canManagePermissions());
+        if (request.canCreateShareLinks() != null)       permission.setCanCreateShareLinks(request.canCreateShareLinks());
+        if (request.canViewSections() != null)           permission.setCanViewSections(request.canViewSections());
+        if (request.canEditSections() != null)           permission.setCanEditSections(request.canEditSections());
+        if (request.canDeleteSections() != null)         permission.setCanDeleteSections(request.canDeleteSections());
+        if (request.canPublishSections() != null)        permission.setCanPublishSections(request.canPublishSections());
+        if (request.canReorderSections() != null)        permission.setCanReorderSections(request.canReorderSections());
+        if (request.canViewTimeline() != null)           permission.setCanViewTimeline(request.canViewTimeline());
+        if (request.canAddTimelineEntries() != null)     permission.setCanAddTimelineEntries(request.canAddTimelineEntries());
+        if (request.canEditTimelineEntries() != null)    permission.setCanEditTimelineEntries(request.canEditTimelineEntries());
+        if (request.canDeleteTimelineEntries() != null)  permission.setCanDeleteTimelineEntries(request.canDeleteTimelineEntries());
+        if (request.canCommentOnTimeline() != null)      permission.setCanCommentOnTimeline(request.canCommentOnTimeline());
+        if (request.canReactOnTimeline() != null)        permission.setCanReactOnTimeline(request.canReactOnTimeline());
+        if (request.canViewDocuments() != null)          permission.setCanViewDocuments(request.canViewDocuments());
+        if (request.canUploadDocuments() != null)        permission.setCanUploadDocuments(request.canUploadDocuments());
+        if (request.canDownloadDocuments() != null)      permission.setCanDownloadDocuments(request.canDownloadDocuments());
+        if (request.canDeleteDocuments() != null)        permission.setCanDeleteDocuments(request.canDeleteDocuments());
+
+        PassportPermission saved = permissionRepository.save(permission);
+
+        auditService.log(AuditAction.PERMISSION_CHANGED, userId, updater.getName(), ipAddress)
+            .withPassport(passportId)
+            .withEntity("PassportPermission", permissionId)
+            .withDescription("Updated permissions for " + permission.getUser().getEmail())
+            .save();
+
+        return toPermissionResponse(saved);
+    }
+
+    private PermissionResponse toPermissionResponse(PassportPermission p) {
+        return new PermissionResponse(
+            p.getId(),
+            p.getUser().getId(),
+            p.getUser().getName(),
+            p.getUser().getEmail(),
+            p.getRole().toApiName(),
+            p.getCustomRole() != null ? p.getCustomRole().getName() : null,
+            p.canViewPassport(),
+            p.canEditPassport(),
+            p.canDeletePassport(),
+            p.canManagePermissions(),
+            p.canCreateShareLinks(),
+            p.canViewSections(),
+            p.canEditSections(),
+            p.canDeleteSections(),
+            p.canPublishSections(),
+            p.canReorderSections(),
+            p.canViewTimeline(),
+            p.canAddTimelineEntries(),
+            p.canEditTimelineEntries(),
+            p.canDeleteTimelineEntries(),
+            p.canCommentOnTimeline(),
+            p.canReactOnTimeline(),
+            p.canViewDocuments(),
+            p.canUploadDocuments(),
+            p.canDownloadDocuments(),
+            p.canDeleteDocuments(),
+            p.getGrantedAt(),
+            p.getNotes()
+        );
     }
 
     @Transactional
@@ -553,11 +638,14 @@ public class PassportService {
         Passport passport = getPassport(passportId, userId, ipAddress);
         Role userRole = permissionEvaluator.getRole(passportId, userId);
 
-        // Filter sections based on visibility
-        Map<SectionType, List<SectionResponse>> filteredSections = passport.getSections().stream()
-            .filter(section -> isSectionVisibleToRole(section, userRole))
-            .map(this::toSectionResponse)
-            .collect(Collectors.groupingBy(SectionResponse::type));
+        // Filter sections: hide all if canViewSections is false, then apply visibility rules
+        boolean canViewSections = permissionEvaluator.canViewSections(passportId, userId);
+        Map<SectionType, List<SectionResponse>> filteredSections = canViewSections
+            ? passport.getSections().stream()
+                .filter(section -> isSectionVisibleToRole(section, userRole))
+                .map(this::toSectionResponse)
+                .collect(Collectors.groupingBy(SectionResponse::type))
+            : Collections.emptyMap();
 
         return new PassportResponse(
             passport.getId(),
@@ -568,7 +656,7 @@ public class PassportService {
             passport.getCreatedBy().getName(),
             passport.isWizardComplete(),
             filteredSections,
-            userRole.name(),
+            userRole.toApiName(),
             passport.getCreatedAt(),
             passport.getUpdatedAt()
         );
@@ -590,6 +678,10 @@ public class PassportService {
 
         if (!permissionEvaluator.canView(passportId, userId)) {
             throw new SecurityException("Access denied");
+        }
+
+        if (!permissionEvaluator.canViewSections(passportId, userId)) {
+            throw new SecurityException("Access denied - cannot view sections");
         }
 
         passport.getSections().stream()
@@ -615,8 +707,8 @@ public class PassportService {
         Passport passport = passportRepository.findActiveById(passportId)
             .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
 
-        if (!permissionEvaluator.canEdit(passportId, userId)) {
-            throw new SecurityException("Access denied - cannot edit passport");
+        if (!permissionEvaluator.canEditSections(passportId, userId)) {
+            throw new SecurityException("Access denied - cannot edit sections");
         }
 
         User user = userRepository.findById(userId)
@@ -667,8 +759,8 @@ public class PassportService {
         Passport passport = passportRepository.findActiveById(passportId)
             .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
 
-        if (!permissionEvaluator.canEdit(passportId, userId)) {
-            throw new SecurityException("Access denied - cannot edit passport");
+        if (!permissionEvaluator.canReorderSections(passportId, userId)) {
+            throw new SecurityException("Access denied - cannot reorder sections");
         }
 
         User user = userRepository.findById(userId)

@@ -53,7 +53,7 @@ public class TimelineService {
      * Create a new timeline entry
      */
     @Transactional
-    public TimelineEntry createEntry(UUID passportId, UUID userId,
+    public TimelineEntryResponse createEntry(UUID passportId, UUID userId,
                                      CreateTimelineEntryRequest request, String ipAddress) {
         Passport passport = passportRepository.findActiveById(passportId)
             .orElseThrow(() -> new ResourceNotFoundException("Passport not found"));
@@ -94,7 +94,7 @@ public class TimelineService {
             .withDescription("Created timeline entry: " + request.title())
             .withDataCategories("BEHAVIORAL", "ACTIVITIES");
 
-        return saved;
+        return toResponse(saved, permissionEvaluator.getRole(passportId, userId));
     }
 
     /**
@@ -158,7 +158,7 @@ public class TimelineService {
      * Get a single timeline entry
      */
     @Transactional(readOnly = true)
-    public TimelineEntry getEntry(UUID entryId, UUID userId, String ipAddress) {
+    public TimelineEntryResponse getEntry(UUID entryId, UUID userId, String ipAddress) {
         TimelineEntry entry = timelineRepository.findById(entryId)
             .orElseThrow(() -> new ResourceNotFoundException("Timeline entry not found"));
 
@@ -176,14 +176,14 @@ public class TimelineService {
             throw new SecurityException("You don't have permission to view this entry");
         }
 
-        return entry;
+        return toResponse(entry, userRole);
     }
 
     /**
      * Update a timeline entry
      */
     @Transactional
-    public TimelineEntry updateEntry(UUID entryId, UUID userId,
+    public TimelineEntryResponse updateEntry(UUID entryId, UUID userId,
                                      UpdateTimelineEntryRequest request, String ipAddress) {
         TimelineEntry entry = timelineRepository.findById(entryId)
             .orElseThrow(() -> new ResourceNotFoundException("Timeline entry not found"));
@@ -196,11 +196,10 @@ public class TimelineService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // Only author or owners can edit
         boolean isAuthor = entry.getAuthor().getId().equals(userId);
-        boolean isOwner = permissionEvaluator.isOwner(passportId, userId);
+        boolean canEdit = permissionEvaluator.canEditTimelineEntries(passportId, userId);
 
-        if (!isAuthor && !isOwner) {
+        if (!isAuthor && !canEdit) {
             throw new SecurityException("You don't have permission to edit this entry");
         }
 
@@ -237,7 +236,7 @@ public class TimelineService {
             .withEntity("TimelineEntry", entryId)
             .withDescription("Updated timeline entry: " + entry.getTitle());
 
-        return saved;
+        return toResponse(saved, permissionEvaluator.getRole(passportId, userId));
     }
 
     /**
@@ -252,11 +251,10 @@ public class TimelineService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // Only author or owners can delete
         boolean isAuthor = entry.getAuthor().getId().equals(userId);
-        boolean isOwner = permissionEvaluator.isOwner(passportId, userId);
+        boolean canDelete = permissionEvaluator.canDeleteTimelineEntries(passportId, userId);
 
-        if (!isAuthor && !isOwner) {
+        if (!isAuthor && !canDelete) {
             throw new SecurityException("You don't have permission to delete this entry");
         }
 
@@ -273,7 +271,7 @@ public class TimelineService {
      * Get entries by type
      */
     @Transactional(readOnly = true)
-    public List<TimelineEntry> getEntriesByType(UUID passportId, UUID userId,
+    public List<TimelineEntryResponse> getEntriesByType(UUID passportId, UUID userId,
                                                  EntryType type, String ipAddress) {
         if (!permissionEvaluator.canViewTimeline(passportId, userId)) {
             throw new SecurityException("You don't have permission to view this timeline");
@@ -283,6 +281,7 @@ public class TimelineService {
 
         return timelineRepository.findByPassportIdAndType(passportId, type).stream()
             .filter(entry -> entry.isVisibleTo(userRole))
+            .map(entry -> toResponse(entry, userRole))
             .collect(Collectors.toList());
     }
 
@@ -290,7 +289,7 @@ public class TimelineService {
      * Toggle pin status
      */
     @Transactional
-    public TimelineEntry togglePin(UUID entryId, UUID userId, String ipAddress) {
+    public TimelineEntryResponse togglePin(UUID entryId, UUID userId, String ipAddress) {
         TimelineEntry entry = timelineRepository.findById(entryId)
             .orElseThrow(() -> new ResourceNotFoundException("Timeline entry not found"));
 
@@ -300,7 +299,8 @@ public class TimelineService {
         }
 
         entry.setPinned(!entry.isPinned());
-        return timelineRepository.save(entry);
+        TimelineEntry saved = timelineRepository.save(entry);
+        return toResponse(saved, permissionEvaluator.getRole(passportId, userId));
     }
 
     // Helper methods
@@ -331,7 +331,9 @@ public class TimelineService {
             new AuthorInfo(
                 entry.getAuthor().getId(),
                 entry.getAuthor().getName(),
-                permissionEvaluator.getRole(entry.getPassport().getId(), entry.getAuthor().getId()).name()
+                permissionEvaluator.getRole(entry.getPassport().getId(), entry.getAuthor().getId()) != null
+                    ? permissionEvaluator.getRole(entry.getPassport().getId(), entry.getAuthor().getId()).toApiName()
+                    : "VIEWER"
             ),
             entry.getEntryType(),
             entry.getTitle(),

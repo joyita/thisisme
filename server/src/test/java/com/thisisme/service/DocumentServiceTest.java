@@ -217,7 +217,7 @@ class DocumentServiceTest {
     void deleteDocument_ShouldSoftDeleteWhenUserIsUploader() {
         when(documentRepository.findById(testDocument.getId())).thenReturn(Optional.of(testDocument));
         when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
-        when(permissionEvaluator.isOwner(testPassport.getId(), testUser.getId())).thenReturn(false);
+        when(permissionEvaluator.canDeleteDocuments(testPassport.getId(), testUser.getId())).thenReturn(false);
         when(documentRepository.save(any(Document.class))).thenAnswer(i -> i.getArgument(0));
 
         documentService.deleteDocument(testDocument.getId(), testUser.getId(), "192.168.1.1");
@@ -232,7 +232,7 @@ class DocumentServiceTest {
 
         when(documentRepository.findById(testDocument.getId())).thenReturn(Optional.of(testDocument));
         when(userRepository.findById(otherUser.getId())).thenReturn(Optional.of(otherUser));
-        when(permissionEvaluator.isOwner(testPassport.getId(), otherUser.getId())).thenReturn(false);
+        when(permissionEvaluator.canDeleteDocuments(testPassport.getId(), otherUser.getId())).thenReturn(false);
 
         assertThrows(SecurityException.class, () ->
             documentService.deleteDocument(testDocument.getId(), otherUser.getId(), "192.168.1.1")
@@ -243,6 +243,7 @@ class DocumentServiceTest {
     void getDownloadUrl_ShouldGenerateUrl() {
         when(documentRepository.findById(testDocument.getId())).thenReturn(Optional.of(testDocument));
         when(permissionEvaluator.canViewDocuments(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.canDownloadDocuments(testPassport.getId(), testUser.getId())).thenReturn(true);
         when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
         when(storageService.getDownloadUrl(testDocument.getStoragePath(), testDocument.getOriginalFileName()))
             .thenReturn("https://storage.example.com/download/file");

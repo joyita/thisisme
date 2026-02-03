@@ -5,20 +5,25 @@ import com.thisisme.model.dto.LoginRequest;
 import com.thisisme.model.dto.RegisterRequest;
 import com.thisisme.security.UserPrincipal;
 import com.thisisme.service.AuthService;
+import com.thisisme.service.InvitationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
     private final AuthService authService;
+    private final InvitationService invitationService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, InvitationService invitationService) {
         this.authService = authService;
+        this.invitationService = invitationService;
     }
 
     @PostMapping("/register")
@@ -64,6 +69,16 @@ public class AuthController {
             authService.logout(principal.id(), getClientIp(httpRequest));
         }
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Public endpoint: validates an invite token and returns the pre-fill email.
+     * Called by the frontend when the register page loads with ?invite=<token>.
+     */
+    @GetMapping("/invite/validate")
+    public ResponseEntity<Map<String, String>> validateInvite(@RequestParam String token) {
+        String email = invitationService.validateInviteToken(token);
+        return ResponseEntity.ok(Map.of("email", email));
     }
 
     private String getClientIp(HttpServletRequest request) {

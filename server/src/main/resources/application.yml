@@ -46,6 +46,13 @@ app:
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000}
 
+  email:
+    from: ${APP_EMAIL_FROM:noreply@thisisme.app}
+    from-name: ${APP_EMAIL_FROM_NAME:ThisIsMe}
+
+  frontend:
+    url: ${APP_FRONTEND_URL:http://localhost:3000}
+
   privacy:
     policy-version: "1.0.0"
 

@@ -57,7 +57,7 @@ public class CollaborationService {
             .orElseThrow(() -> new ResourceNotFoundException("Entry not found"));
 
         UUID passportId = entry.getPassport().getId();
-        if (!permissionEvaluator.canViewTimeline(passportId, userId)) {
+        if (!permissionEvaluator.canCommentOnTimeline(passportId, userId)) {
             throw new SecurityException("You don't have permission to comment on this entry");
         }
 
@@ -152,7 +152,7 @@ public class CollaborationService {
             .orElseThrow(() -> new ResourceNotFoundException("Entry not found"));
 
         UUID passportId = entry.getPassport().getId();
-        if (!permissionEvaluator.canViewTimeline(passportId, userId)) {
+        if (!permissionEvaluator.canReactOnTimeline(passportId, userId)) {
             throw new SecurityException("You don't have permission to react to this entry");
         }
 
@@ -217,7 +217,7 @@ public class CollaborationService {
             new AuthorInfo(
                 comment.getAuthor().getId(),
                 comment.getAuthor().getName(),
-                authorRole != null ? authorRole.name() : "VIEWER"
+                authorRole != null ? authorRole.toApiName() : "VIEWER"
             ),
             comment.getContent(),
             new HashSet<>(comment.getMentionedUserIds()),

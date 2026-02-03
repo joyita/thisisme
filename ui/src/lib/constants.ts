@@ -251,6 +251,55 @@ export const VISIBILITY_CONFIG = {
   },
 } as const;
 
+// Permission categories for the granular permission matrix (Stage 2)
+import type { PermissionKey } from './api';
+
+export const PERMISSION_CATEGORIES: {
+  label: string;
+  permissions: { key: PermissionKey; label: string }[];
+}[] = [
+  {
+    label: 'Passport',
+    permissions: [
+      { key: 'canViewPassport', label: 'View passport' },
+      { key: 'canEditPassport', label: 'Edit passport details' },
+      { key: 'canDeletePassport', label: 'Delete passport' },
+      { key: 'canManagePermissions', label: 'Manage access' },
+      { key: 'canCreateShareLinks', label: 'Create share links' },
+    ],
+  },
+  {
+    label: 'Sections',
+    permissions: [
+      { key: 'canViewSections', label: 'View sections' },
+      { key: 'canEditSections', label: 'Edit sections' },
+      { key: 'canDeleteSections', label: 'Delete sections' },
+      { key: 'canPublishSections', label: 'Publish sections' },
+      { key: 'canReorderSections', label: 'Reorder sections' },
+    ],
+  },
+  {
+    label: 'Timeline',
+    permissions: [
+      { key: 'canViewTimeline', label: 'View timeline' },
+      { key: 'canAddTimelineEntries', label: 'Add entries' },
+      { key: 'canEditTimelineEntries', label: 'Edit entries' },
+      { key: 'canDeleteTimelineEntries', label: 'Delete entries' },
+      { key: 'canCommentOnTimeline', label: 'Comment' },
+      { key: 'canReactOnTimeline', label: 'React' },
+    ],
+  },
+  {
+    label: 'Documents',
+    permissions: [
+      { key: 'canViewDocuments', label: 'View documents' },
+      { key: 'canUploadDocuments', label: 'Upload documents' },
+      { key: 'canDownloadDocuments', label: 'Download documents' },
+      { key: 'canDeleteDocuments', label: 'Delete documents' },
+    ],
+  },
+];
+
 // Role Configuration
 export const ROLE_CONFIG = {
   OWNER: {

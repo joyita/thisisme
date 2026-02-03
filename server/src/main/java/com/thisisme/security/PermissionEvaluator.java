@@ -30,64 +30,131 @@ public class PermissionEvaluator {
      * Check if user can view the passport
      */
     public boolean canView(UUID passportId, UUID userId) {
-        return permissionRepository.findActivePermission(passportId, userId).isPresent();
-    }
-
-    /**
-     * Check if user can edit the passport
-     */
-    public boolean canEdit(UUID passportId, UUID userId) {
-        return permissionRepository.hasAnyRole(passportId, userId, List.of(Role.OWNER, Role.CO_OWNER));
-    }
-
-    /**
-     * Check if user can add timeline entries
-     */
-    public boolean canAddTimelineEntries(UUID passportId, UUID userId) {
         return permissionRepository.findActivePermission(passportId, userId)
-                .map(p -> p.canAddTimelineEntries())
+                .map(p -> p.canViewPassport())
                 .orElse(false);
     }
 
-    /**
-     * Check if user can view timeline
-     */
+    // --- Passport-level ---
+
+    public boolean canEdit(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canEditPassport())
+                .orElse(false);
+    }
+
+    public boolean canDeletePassport(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canDeletePassport())
+                .orElse(false);
+    }
+
+    public boolean canManageAccess(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canManagePermissions())
+                .orElse(false);
+    }
+
+    public boolean canCreateShareLinks(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canCreateShareLinks())
+                .orElse(false);
+    }
+
+    // --- Section-level ---
+
+    public boolean canViewSections(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canViewSections())
+                .orElse(false);
+    }
+
+    public boolean canEditSections(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canEditSections())
+                .orElse(false);
+    }
+
+    public boolean canDeleteSections(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canDeleteSections())
+                .orElse(false);
+    }
+
+    public boolean canPublish(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canPublishSections())
+                .orElse(false);
+    }
+
+    public boolean canReorderSections(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canReorderSections())
+                .orElse(false);
+    }
+
+    // --- Timeline-level ---
+
     public boolean canViewTimeline(UUID passportId, UUID userId) {
         return permissionRepository.findActivePermission(passportId, userId)
                 .map(p -> p.canViewTimeline())
                 .orElse(false);
     }
 
-    /**
-     * Check if user can view documents
-     */
+    public boolean canAddTimelineEntries(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canAddTimelineEntries())
+                .orElse(false);
+    }
+
+    public boolean canEditTimelineEntries(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canEditTimelineEntries())
+                .orElse(false);
+    }
+
+    public boolean canDeleteTimelineEntries(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canDeleteTimelineEntries())
+                .orElse(false);
+    }
+
+    public boolean canCommentOnTimeline(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canCommentOnTimeline())
+                .orElse(false);
+    }
+
+    public boolean canReactOnTimeline(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canReactOnTimeline())
+                .orElse(false);
+    }
+
+    // --- Document-level ---
+
     public boolean canViewDocuments(UUID passportId, UUID userId) {
         return permissionRepository.findActivePermission(passportId, userId)
                 .map(p -> p.canViewDocuments())
                 .orElse(false);
     }
 
-    /**
-     * Check if user can upload documents
-     */
     public boolean canUploadDocuments(UUID passportId, UUID userId) {
         return permissionRepository.findActivePermission(passportId, userId)
                 .map(p -> p.canUploadDocuments())
                 .orElse(false);
     }
 
-    /**
-     * Check if user can publish or unpublish sections (owner only, not co-owner)
-     */
-    public boolean canPublish(UUID passportId, UUID userId) {
-        return permissionRepository.hasAnyRole(passportId, userId, List.of(Role.OWNER));
+    public boolean canDownloadDocuments(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canDownloadDocuments())
+                .orElse(false);
     }
 
-    /**
-     * Check if user can manage access (invite others)
-     */
-    public boolean canManageAccess(UUID passportId, UUID userId) {
-        return isOwner(passportId, userId);
+    public boolean canDeleteDocuments(UUID passportId, UUID userId) {
+        return permissionRepository.findActivePermission(passportId, userId)
+                .map(p -> p.canDeleteDocuments())
+                .orElse(false);
     }
 
     /**

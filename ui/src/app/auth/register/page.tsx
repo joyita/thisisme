@@ -1,15 +1,17 @@
 // src/app/auth/register/page.tsx
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, FormEvent, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { MdFace } from 'react-icons/md';
+import { inviteApi } from '@/lib/api';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { register, isLoading, error, clearError } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -17,6 +19,22 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [consentGiven, setConsentGiven] = useState(false);
   const [localError, setLocalError] = useState('');
+  const [emailLocked, setEmailLocked] = useState(false);
+
+  // Validate invite token on mount and pre-fill email if valid
+  useEffect(() => {
+    const inviteToken = searchParams.get('invite');
+    if (!inviteToken) return;
+
+    inviteApi.validate(inviteToken)
+      .then(({ email: invitedEmail }) => {
+        setEmail(invitedEmail);
+        setEmailLocked(true);
+      })
+      .catch((err) => {
+        setLocalError(err instanceof Error ? err.message : 'This invitation link is invalid or has expired');
+      });
+  }, [searchParams]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -50,7 +68,7 @@ export default function RegisterPage() {
 
     try {
       await register(name.trim(), email.trim(), password, consentGiven);
-      router.push('/wizard');
+      router.push(emailLocked ? '/dashboard' : '/wizard');
     } catch (err: any) {
       // Error is handled by AuthContext
     }
@@ -70,7 +88,9 @@ export default function RegisterPage() {
               Create Account
             </h1>
             <p className="text-xs sm:text-base text-gray-700 mt-1.5 sm:mt-2">
-              Start creating passports for your children
+              {emailLocked
+                ? 'Accept your invitation and get started'
+                : 'Start creating passports for your children'}
             </p>
           </div>
 
@@ -104,9 +124,12 @@ export default function RegisterPage() {
                 placeholder="you@example.com"
                 required
                 autoComplete="email"
-                disabled={isLoading}
+                disabled={isLoading || emailLocked}
                 className="w-full px-3 py-2.5 rounded-md border-2 bg-white text-base text-gray-900 border-gray-300 hover:border-gray-400 focus:border-[#be185d] focus:outline-none focus:ring-4 focus:ring-pink-200/50 transition-all min-h-[48px] placeholder:text-gray-500 disabled:opacity-50"
               />
+              {emailLocked && (
+                <p className="text-xs text-purple-600 mt-1">Pre-filled from your invitation link</p>
+              )}
             </div>
 
             <div className="space-y-1">

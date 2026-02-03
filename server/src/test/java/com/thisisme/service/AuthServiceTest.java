@@ -41,11 +41,14 @@ class AuthServiceTest {
     @Mock
     private AuditService.AuditLogBuilder auditLogBuilder;
 
+    @Mock
+    private InvitationService invitationService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder, tokenProvider, auditService);
+        authService = new AuthService(userRepository, passwordEncoder, tokenProvider, auditService, invitationService);
 
         // Setup audit service mock chain
         lenient().when(auditService.log(any(), any(), any(), any())).thenReturn(auditLogBuilder);

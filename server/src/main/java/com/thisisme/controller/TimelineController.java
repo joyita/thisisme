@@ -1,10 +1,7 @@
 package com.thisisme.controller;
 
 import com.thisisme.model.dto.TimelineDTO.*;
-import com.thisisme.model.entity.TimelineEntry;
 import com.thisisme.model.enums.EntryType;
-import com.thisisme.model.enums.Role;
-import com.thisisme.security.PermissionEvaluator;
 import com.thisisme.security.UserPrincipal;
 import com.thisisme.service.TimelineService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,19 +13,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/passports/{passportId}/timeline")
 public class TimelineController {
 
     private final TimelineService timelineService;
-    private final PermissionEvaluator permissionEvaluator;
 
-    public TimelineController(TimelineService timelineService,
-                              PermissionEvaluator permissionEvaluator) {
+    public TimelineController(TimelineService timelineService) {
         this.timelineService = timelineService;
-        this.permissionEvaluator = permissionEvaluator;
     }
 
     @PostMapping
@@ -38,14 +31,14 @@ public class TimelineController {
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest httpRequest) {
 
-        TimelineEntry entry = timelineService.createEntry(
+        TimelineEntryResponse response = timelineService.createEntry(
             passportId,
             principal.id(),
             request,
             getClientIp(httpRequest)
         );
 
-        return ResponseEntity.ok(toResponse(entry, passportId, principal.id()));
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping
@@ -88,13 +81,13 @@ public class TimelineController {
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest httpRequest) {
 
-        TimelineEntry entry = timelineService.getEntry(
+        TimelineEntryResponse response = timelineService.getEntry(
             entryId,
             principal.id(),
             getClientIp(httpRequest)
         );
 
-        return ResponseEntity.ok(toResponse(entry, passportId, principal.id()));
+        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{entryId}")
@@ -105,14 +98,14 @@ public class TimelineController {
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest httpRequest) {
 
-        TimelineEntry entry = timelineService.updateEntry(
+        TimelineEntryResponse response = timelineService.updateEntry(
             entryId,
             principal.id(),
             request,
             getClientIp(httpRequest)
         );
 
-        return ResponseEntity.ok(toResponse(entry, passportId, principal.id()));
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{entryId}")
@@ -138,16 +131,12 @@ public class TimelineController {
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest httpRequest) {
 
-        List<TimelineEntry> entries = timelineService.getEntriesByType(
+        List<TimelineEntryResponse> responses = timelineService.getEntriesByType(
             passportId,
             principal.id(),
             type,
             getClientIp(httpRequest)
         );
-
-        List<TimelineEntryResponse> responses = entries.stream()
-            .map(entry -> toResponse(entry, passportId, principal.id()))
-            .collect(Collectors.toList());
 
         return ResponseEntity.ok(responses);
     }
@@ -159,13 +148,13 @@ public class TimelineController {
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest httpRequest) {
 
-        TimelineEntry entry = timelineService.togglePin(
+        TimelineEntryResponse response = timelineService.togglePin(
             entryId,
             principal.id(),
             getClientIp(httpRequest)
         );
 
-        return ResponseEntity.ok(toResponse(entry, passportId, principal.id()));
+        return ResponseEntity.ok(response);
     }
 
     private String getClientIp(HttpServletRequest request) {
@@ -174,34 +163,5 @@ public class TimelineController {
             return xForwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
-    }
-
-    private TimelineEntryResponse toResponse(TimelineEntry entry, UUID passportId, UUID viewerId) {
-        Role authorRole = permissionEvaluator.getRole(passportId, entry.getAuthor().getId());
-        // Make defensive copies of collections to avoid LazyInitializationException
-        Set<Role> visibleToRoles = entry.getVisibleToRoles() != null ? new java.util.HashSet<>(entry.getVisibleToRoles()) : Set.of();
-        Set<String> tags = entry.getTags() != null ? new java.util.HashSet<>(entry.getTags()) : Set.of();
-        int attachmentCount = entry.getAttachments() != null ? entry.getAttachments().size() : 0;
-
-        return new TimelineEntryResponse(
-            entry.getId(),
-            entry.getPassport().getId(),
-            new AuthorInfo(
-                entry.getAuthor().getId(),
-                entry.getAuthor().getName(),
-                authorRole != null ? authorRole.name() : "VIEWER"
-            ),
-            entry.getEntryType(),
-            entry.getTitle(),
-            entry.getContent(),
-            entry.getEntryDate(),
-            entry.getVisibilityLevel(),
-            visibleToRoles,
-            tags,
-            entry.isPinned(),
-            attachmentCount,
-            entry.getCreatedAt(),
-            entry.getUpdatedAt()
-        );
     }
 }

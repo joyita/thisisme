@@ -56,6 +56,13 @@ public enum AuditAction {
     DATA_RECTIFICATION_REQUESTED,
     DATA_RECTIFICATION_COMPLETED,
 
+    // Invitation operations
+    INVITATION_SENT,
+    INVITATION_ACCEPTED,
+    INVITATION_EXPIRED,
+    INVITATION_REVOKED,
+    INVITATION_RESENT,
+
     // Admin operations
     USER_CREATED,
     USER_UPDATED,

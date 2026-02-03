@@ -93,7 +93,7 @@ class ShareLinkServiceTest {
             null
         );
 
-        when(permissionEvaluator.canManageAccess(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.canCreateShareLinks(testPassport.getId(), testUser.getId())).thenReturn(true);
         when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
         when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
         when(shareLinkRepository.findByToken(any())).thenReturn(Optional.empty());
@@ -123,7 +123,7 @@ class ShareLinkServiceTest {
             null, null, false, false, null, null
         );
 
-        when(permissionEvaluator.canManageAccess(testPassport.getId(), testUser.getId())).thenReturn(false);
+        when(permissionEvaluator.canCreateShareLinks(testPassport.getId(), testUser.getId())).thenReturn(false);
 
         assertThrows(SecurityException.class, () ->
             shareLinkService.createShareLink(testPassport.getId(), testUser.getId(), request, "192.168.1.1")
@@ -136,7 +136,7 @@ class ShareLinkServiceTest {
             null, null, false, false, null, "secret123"
         );
 
-        when(permissionEvaluator.canManageAccess(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.canCreateShareLinks(testPassport.getId(), testUser.getId())).thenReturn(true);
         when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
         when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
         when(shareLinkRepository.findByToken(any())).thenReturn(Optional.empty());
@@ -157,7 +157,7 @@ class ShareLinkServiceTest {
 
     @Test
     void getShareLinks_ShouldReturnLinksForPassport() {
-        when(permissionEvaluator.canManageAccess(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.canCreateShareLinks(testPassport.getId(), testUser.getId())).thenReturn(true);
         when(shareLinkRepository.findAllByPassportId(testPassport.getId())).thenReturn(List.of(testLink));
 
         List<ShareLink> result = shareLinkService.getShareLinks(testPassport.getId(), testUser.getId());
@@ -169,7 +169,7 @@ class ShareLinkServiceTest {
     @Test
     void revokeShareLink_ShouldRevokeLink() {
         when(shareLinkRepository.findById(testLink.getId())).thenReturn(Optional.of(testLink));
-        when(permissionEvaluator.canManageAccess(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.canCreateShareLinks(testPassport.getId(), testUser.getId())).thenReturn(true);
         when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
         when(shareLinkRepository.save(any(ShareLink.class))).thenAnswer(i -> i.getArgument(0));
 

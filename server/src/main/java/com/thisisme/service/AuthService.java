@@ -21,15 +21,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final AuditService auditService;
+    private final InvitationService invitationService;
 
     public AuthService(UserRepository userRepository,
                       PasswordEncoder passwordEncoder,
                       JwtTokenProvider tokenProvider,
-                      AuditService auditService) {
+                      AuditService auditService,
+                      InvitationService invitationService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.auditService = auditService;
+        this.invitationService = invitationService;
     }
 
     @Transactional
@@ -52,6 +55,9 @@ public class AuthService {
             .withRequestContext(null, userAgent)
             .withDescription("User registered")
             .save();
+
+        // Auto-apply any pending invitations for this email address
+        invitationService.applyPendingInvitations(saved, ipAddress);
 
         return createAuthResponse(saved);
     }

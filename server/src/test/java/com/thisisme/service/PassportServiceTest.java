@@ -37,6 +37,8 @@ class PassportServiceTest {
     @Mock private AuditService.AuditLogBuilder auditLogBuilder;
     @Mock private NotificationService notificationService;
     @Mock private SectionRevisionRepository sectionRevisionRepository;
+    @Mock private InvitationService invitationService;
+    @Mock private CustomRoleService customRoleService;
 
     private PassportService passportService;
     private User testUser;
@@ -52,7 +54,7 @@ class PassportServiceTest {
             consentService,
             auditService,
             permissionEvaluator,
-            objectMapper, notificationService, sectionRevisionRepository
+            objectMapper, notificationService, sectionRevisionRepository, invitationService, customRoleService
         );
 
         testUser = new User("Test User", "test@example.com", "hashedPassword");
@@ -183,7 +185,7 @@ class PassportServiceTest {
         );
 
         when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
-        when(permissionEvaluator.canEdit(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.canEditSections(testPassport.getId(), testUser.getId())).thenReturn(true);
         when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
         when(passportRepository.save(any(Passport.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -204,7 +206,8 @@ class PassportServiceTest {
         AddPermissionRequest request = new AddPermissionRequest(
             "target@example.com",
             "PROFESSIONAL",
-            "Child's therapist"
+            "Child's therapist",
+            null
         );
 
         when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
@@ -232,7 +235,7 @@ class PassportServiceTest {
         User targetUser = new User("Target User", "target@example.com", "hash");
         ReflectionTestUtils.setField(targetUser, "id", UUID.randomUUID());
 
-        AddPermissionRequest request = new AddPermissionRequest("target@example.com", "PROFESSIONAL", null);
+        AddPermissionRequest request = new AddPermissionRequest("target@example.com", "PROFESSIONAL", null, null);
 
         PassportPermission existingPermission = new PassportPermission(testPassport, targetUser, Role.VIEWER, testUser);
 

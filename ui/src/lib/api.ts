@@ -380,10 +380,35 @@ export const permissionsApi = {
     return apiRequest<PassportPermissionDetail[]>(`/api/v1/passports/${passportId}/permissions`);
   },
 
-  async add(passportId: string, request: AddPermissionRequest) {
-    return apiRequest<PassportPermissionDetail>(`/api/v1/passports/${passportId}/permissions`, {
+  /**
+   * Adds a permission. Returns the granted permission if the user exists,
+   * or undefined if an invitation was created (HTTP 202).
+   */
+  async add(passportId: string, request: AddPermissionRequest): Promise<PassportPermissionDetail | undefined> {
+    const t = getTokens();
+    const response = await fetch(`${API_BASE}/api/v1/passports/${passportId}/permissions`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(t?.accessToken ? { Authorization: `Bearer ${t.accessToken}` } : {}),
+      },
       body: JSON.stringify(request),
+    });
+
+    if (response.status === 202) {
+      return undefined; // Invitation created
+    }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Request failed' }));
+      throw new ApiError(response.status, error.message || 'Request failed');
+    }
+    return response.json();
+  },
+
+  async update(passportId: string, permissionId: string, updates: Partial<Record<PermissionKey, boolean>>) {
+    return apiRequest<PassportPermissionDetail>(`/api/v1/passports/${passportId}/permissions/${permissionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
     });
   },
 
@@ -391,6 +416,64 @@ export const permissionsApi = {
     return apiRequest<void>(`/api/v1/passports/${passportId}/permissions/${permissionId}`, {
       method: 'DELETE',
     });
+  },
+};
+
+// Invitations API
+export const invitationsApi = {
+  async list(passportId: string) {
+    return apiRequest<PendingInvitation[]>(`/api/v1/passports/${passportId}/invitations`);
+  },
+
+  async resend(passportId: string, invitationId: string) {
+    return apiRequest<PendingInvitation>(`/api/v1/passports/${passportId}/invitations/${invitationId}/resend`, {
+      method: 'POST',
+    });
+  },
+
+  async revoke(passportId: string, invitationId: string) {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/invitations/${invitationId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Custom Roles API
+export const customRolesApi = {
+  async list(passportId: string) {
+    return apiRequest<CustomRole[]>(`/api/v1/passports/${passportId}/custom-roles`);
+  },
+
+  async create(passportId: string, payload: CreateCustomRolePayload) {
+    return apiRequest<CustomRole>(`/api/v1/passports/${passportId}/custom-roles`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async update(passportId: string, customRoleId: string, payload: Partial<CreateCustomRolePayload>) {
+    return apiRequest<CustomRole>(`/api/v1/passports/${passportId}/custom-roles/${customRoleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async remove(passportId: string, customRoleId: string) {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/custom-roles/${customRoleId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Auth invite validation (public — no token needed)
+export const inviteApi = {
+  async validate(token: string): Promise<{ email: string }> {
+    const response = await fetch(`${API_BASE}/api/auth/invite/validate?token=${encodeURIComponent(token)}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Invalid invitation link' }));
+      throw new ApiError(response.status, error.message || 'Invalid invitation link');
+    }
+    return response.json();
   },
 };
 
@@ -578,20 +661,94 @@ export interface PassportPermissionDetail {
   userName: string;
   userEmail: string;
   role: string;
+  customRoleName?: string;
+  // Passport
+  canViewPassport: boolean;
+  canEditPassport: boolean;
+  canDeletePassport: boolean;
+  canManagePermissions: boolean;
+  canCreateShareLinks: boolean;
+  // Sections
+  canViewSections: boolean;
+  canEditSections: boolean;
+  canDeleteSections: boolean;
+  canPublishSections: boolean;
+  canReorderSections: boolean;
+  // Timeline
   canViewTimeline: boolean;
   canAddTimelineEntries: boolean;
+  canEditTimelineEntries: boolean;
+  canDeleteTimelineEntries: boolean;
+  canCommentOnTimeline: boolean;
+  canReactOnTimeline: boolean;
+  // Documents
   canViewDocuments: boolean;
   canUploadDocuments: boolean;
+  canDownloadDocuments: boolean;
+  canDeleteDocuments: boolean;
   grantedAt: string;
   notes?: string;
 }
+
+export type PermissionKey =
+  | 'canViewPassport' | 'canEditPassport' | 'canDeletePassport' | 'canManagePermissions' | 'canCreateShareLinks'
+  | 'canViewSections' | 'canEditSections' | 'canDeleteSections' | 'canPublishSections' | 'canReorderSections'
+  | 'canViewTimeline' | 'canAddTimelineEntries' | 'canEditTimelineEntries' | 'canDeleteTimelineEntries'
+  | 'canCommentOnTimeline' | 'canReactOnTimeline'
+  | 'canViewDocuments' | 'canUploadDocuments' | 'canDownloadDocuments' | 'canDeleteDocuments';
 
 // Matches backend AddPermissionRequest
 export interface AddPermissionRequest {
   email: string;
   role: string;
   notes?: string;
+  customRoleId?: string;
 }
+
+// Matches backend InvitationResponse
+export interface PendingInvitation {
+  id: string;
+  email: string;
+  role: string;
+  customRoleName?: string;
+  status: 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'REVOKED';
+  invitedByName: string;
+  createdAt: string;
+  expiresAt: string;
+  notes?: string;
+}
+
+// Custom role types
+export interface CustomRole {
+  id: string;
+  name: string;
+  description?: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+  canViewPassport: boolean;
+  canEditPassport: boolean;
+  canDeletePassport: boolean;
+  canManagePermissions: boolean;
+  canCreateShareLinks: boolean;
+  canViewSections: boolean;
+  canEditSections: boolean;
+  canDeleteSections: boolean;
+  canPublishSections: boolean;
+  canReorderSections: boolean;
+  canViewTimeline: boolean;
+  canAddTimelineEntries: boolean;
+  canEditTimelineEntries: boolean;
+  canDeleteTimelineEntries: boolean;
+  canCommentOnTimeline: boolean;
+  canReactOnTimeline: boolean;
+  canViewDocuments: boolean;
+  canUploadDocuments: boolean;
+  canDownloadDocuments: boolean;
+  canDeleteDocuments: boolean;
+}
+
+export type CreateCustomRolePayload = Omit<CustomRole, 'id' | 'createdByName' | 'createdAt' | 'updatedAt'>;
 
 // Collaboration types
 export type ReactionType = 'HEART' | 'CELEBRATE' | 'SUPPORT' | 'THANK' | 'INSIGHT' | 'CONCERN';

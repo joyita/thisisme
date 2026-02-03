@@ -4,11 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thisisme.model.dto.PassportDTO.*;
 import com.thisisme.model.entity.Passport;
-import com.thisisme.model.entity.PassportPermission;
 import com.thisisme.model.entity.PassportRevision;
 import com.thisisme.model.entity.PassportSection;
 import com.thisisme.model.enums.SectionType;
 import com.thisisme.security.UserPrincipal;
+import com.thisisme.service.CustomRoleService;
+import com.thisisme.service.InvitationService;
 import com.thisisme.service.PassportService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -27,10 +28,17 @@ import java.util.stream.Collectors;
 public class PassportController {
 
     private final PassportService passportService;
+    private final InvitationService invitationService;
+    private final CustomRoleService customRoleService;
     private final ObjectMapper objectMapper;
 
-    public PassportController(PassportService passportService, ObjectMapper objectMapper) {
+    public PassportController(PassportService passportService,
+                              InvitationService invitationService,
+                              CustomRoleService customRoleService,
+                              ObjectMapper objectMapper) {
         this.passportService = passportService;
+        this.invitationService = invitationService;
+        this.customRoleService = customRoleService;
         this.objectMapper = objectMapper;
     }
 
@@ -143,7 +151,24 @@ public class PassportController {
             HttpServletRequest httpRequest) {
         PermissionResponse permission = passportService.addPermission(
             id, principal.id(), request, getClientIp(httpRequest));
+
+        // null means an invitation was created instead of an immediate grant
+        if (permission == null) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(permission);
+    }
+
+    @PutMapping("/{passportId}/permissions/{permissionId}")
+    public ResponseEntity<PermissionResponse> updatePermission(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID passportId,
+            @PathVariable UUID permissionId,
+            @Valid @RequestBody UpdatePermissionRequest request,
+            HttpServletRequest httpRequest) {
+        PermissionResponse permission = passportService.updatePermission(
+            passportId, permissionId, principal.id(), request, getClientIp(httpRequest));
+        return ResponseEntity.ok(permission);
     }
 
     @DeleteMapping("/{passportId}/permissions/{permissionId}")
@@ -153,6 +178,78 @@ public class PassportController {
             @PathVariable UUID permissionId,
             HttpServletRequest httpRequest) {
         passportService.revokePermission(passportId, permissionId, principal.id(), getClientIp(httpRequest));
+        return ResponseEntity.noContent().build();
+    }
+
+    // Invitation endpoints
+    @GetMapping("/{id}/invitations")
+    public ResponseEntity<List<InvitationResponse>> getPendingInvitations(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id) {
+        List<InvitationResponse> invitations = invitationService.getPendingInvitations(id, principal.id());
+        return ResponseEntity.ok(invitations);
+    }
+
+    @PostMapping("/{id}/invitations/{invitationId}/resend")
+    public ResponseEntity<InvitationResponse> resendInvitation(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id,
+            @PathVariable UUID invitationId,
+            HttpServletRequest httpRequest) {
+        InvitationResponse invitation = invitationService.resendInvitation(
+            invitationId, principal.id(), getClientIp(httpRequest));
+        return ResponseEntity.ok(invitation);
+    }
+
+    @DeleteMapping("/{id}/invitations/{invitationId}")
+    public ResponseEntity<Void> revokeInvitation(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id,
+            @PathVariable UUID invitationId,
+            HttpServletRequest httpRequest) {
+        invitationService.revokeInvitation(invitationId, principal.id(), getClientIp(httpRequest));
+        return ResponseEntity.noContent().build();
+    }
+
+    // Custom-role endpoints
+    @GetMapping("/{id}/custom-roles")
+    public ResponseEntity<List<CustomRoleResponse>> getCustomRoles(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id) {
+        List<CustomRoleResponse> roles = customRoleService.listCustomRoles(id, principal.id());
+        return ResponseEntity.ok(roles);
+    }
+
+    @PostMapping("/{id}/custom-roles")
+    public ResponseEntity<CustomRoleResponse> createCustomRole(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateCustomRoleRequest request,
+            HttpServletRequest httpRequest) {
+        CustomRoleResponse role = customRoleService.createCustomRole(
+            id, principal.id(), request, getClientIp(httpRequest));
+        return ResponseEntity.status(HttpStatus.CREATED).body(role);
+    }
+
+    @PutMapping("/{id}/custom-roles/{customRoleId}")
+    public ResponseEntity<CustomRoleResponse> updateCustomRole(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id,
+            @PathVariable UUID customRoleId,
+            @Valid @RequestBody UpdateCustomRoleRequest request,
+            HttpServletRequest httpRequest) {
+        CustomRoleResponse role = customRoleService.updateCustomRole(
+            id, customRoleId, principal.id(), request, getClientIp(httpRequest));
+        return ResponseEntity.ok(role);
+    }
+
+    @DeleteMapping("/{id}/custom-roles/{customRoleId}")
+    public ResponseEntity<Void> deleteCustomRole(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id,
+            @PathVariable UUID customRoleId,
+            HttpServletRequest httpRequest) {
+        customRoleService.deleteCustomRole(id, customRoleId, principal.id(), getClientIp(httpRequest));
         return ResponseEntity.noContent().build();
     }
 
@@ -202,22 +299,6 @@ public class PassportController {
             0,  // revisionCount not needed for immediate responses, will be populated on full passport fetch
             section.getCreatedAt(),
             section.getUpdatedAt()
-        );
-    }
-
-    private PermissionResponse toPermissionResponse(PassportPermission permission) {
-        return new PermissionResponse(
-            permission.getId(),
-            permission.getUser().getId(),
-            permission.getUser().getName(),
-            permission.getUser().getEmail(),
-            permission.getRole().name(),
-            permission.canViewTimeline(),
-            permission.canAddTimelineEntries(),
-            permission.canViewDocuments(),
-            permission.canUploadDocuments(),
-            permission.getGrantedAt(),
-            permission.getNotes()
         );
     }
 

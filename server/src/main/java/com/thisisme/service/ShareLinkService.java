@@ -63,7 +63,7 @@ public class ShareLinkService {
     @Transactional
     public ShareLink createShareLink(UUID passportId, UUID userId,
                                      CreateShareLinkRequest request, String ipAddress) {
-        if (!permissionEvaluator.canManageAccess(passportId, userId)) {
+        if (!permissionEvaluator.canCreateShareLinks(passportId, userId)) {
             throw new SecurityException("You don't have permission to create share links");
         }
 
@@ -108,7 +108,7 @@ public class ShareLinkService {
      */
     @Transactional(readOnly = true)
     public List<ShareLink> getShareLinks(UUID passportId, UUID userId) {
-        if (!permissionEvaluator.canManageAccess(passportId, userId)) {
+        if (!permissionEvaluator.canCreateShareLinks(passportId, userId)) {
             throw new SecurityException("You don't have permission to view share links");
         }
 
@@ -124,7 +124,7 @@ public class ShareLinkService {
             .orElseThrow(() -> new ResourceNotFoundException("Share link not found"));
 
         UUID passportId = link.getPassport().getId();
-        if (!permissionEvaluator.canManageAccess(passportId, userId)) {
+        if (!permissionEvaluator.canCreateShareLinks(passportId, userId)) {
             throw new SecurityException("You don't have permission to revoke share links");
         }
 

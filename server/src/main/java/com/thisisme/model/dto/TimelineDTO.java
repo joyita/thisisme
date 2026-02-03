@@ -16,7 +16,7 @@ public class TimelineDTO {
     public record CreateTimelineEntryRequest(
         @NotNull EntryType entryType,
         @NotBlank String title,
-        @NotBlank String content,
+        String content,
         @NotNull LocalDate entryDate,
         VisibilityLevel visibilityLevel,
         Set<Role> visibleToRoles,

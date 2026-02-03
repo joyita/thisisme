@@ -6,6 +6,7 @@ import com.thisisme.model.dto.LoginRequest;
 import com.thisisme.model.dto.RegisterRequest;
 import com.thisisme.exception.GlobalExceptionHandler;
 import com.thisisme.service.AuthService;
+import com.thisisme.service.InvitationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +37,9 @@ class AuthControllerTest {
 
     @Mock
     private AuthService authService;
+
+    @Mock
+    private InvitationService invitationService;
 
     @InjectMocks
     private AuthController authController;

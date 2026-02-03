@@ -1,11 +1,11 @@
 // src/components/permissions/InviteUserModal.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MdClose } from 'react-icons/md';
 import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
-import { AddPermissionRequest, permissionsApi } from '@/lib/api';
+import { AddPermissionRequest, CustomRole, customRolesApi, permissionsApi } from '@/lib/api';
 import { ROLE_CONFIG } from '@/lib/constants';
 import { Role } from '@/lib/types';
 import toast from 'react-hot-toast';
@@ -25,9 +25,16 @@ export function InviteUserModal({
 }: InviteUserModalProps) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('PROFESSIONAL');
+  const [customRoleId, setCustomRoleId] = useState<string | null>(null);
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!isOpen) return;
+    customRolesApi.list(passportId).then(setCustomRoles).catch(() => {});
+  }, [isOpen, passportId]);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -49,14 +56,27 @@ export function InviteUserModal({
         email: email.trim().toLowerCase(),
         role,
         notes: notes.trim() || undefined,
+        customRoleId: customRoleId ?? undefined,
       };
-      await permissionsApi.add(passportId, request);
-      toast.success(`Invitation sent to ${email}`);
+      const result = await permissionsApi.add(passportId, request);
+
+      if (result === undefined) {
+        // HTTP 202 — invitation created for a new user
+        toast.success(`Invitation sent to ${email.trim()}`);
+      } else {
+        // HTTP 201 — permission granted immediately to existing user
+        toast.success(`Access granted to ${email.trim()}`);
+      }
       onSuccess();
       handleClose();
-    } catch (err: any) {
-      if (err.message?.includes('already has access')) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      if (message.includes('already has access')) {
         toast.error('This user already has access to this passport');
+      } else if (message.includes('already registered')) {
+        toast.error('User already registered — grant access directly');
+      } else if (message.includes('active invitation already exists')) {
+        toast.error('A pending invitation already exists for this email');
       } else {
         toast.error('Failed to send invitation');
       }
@@ -68,6 +88,7 @@ export function InviteUserModal({
   const handleClose = () => {
     setEmail('');
     setRole('PROFESSIONAL');
+    setCustomRoleId(null);
     setNotes('');
     setErrors({});
     onClose();
@@ -108,12 +129,12 @@ export function InviteUserModal({
             <div className="grid grid-cols-3 gap-2">
               {(['CO_PARENT', 'PROFESSIONAL', 'VIEWER'] as Role[]).map(r => {
                 const config = ROLE_CONFIG[r];
-                const isSelected = role === r;
+                const isSelected = !customRoleId && role === r;
                 return (
                   <button
                     key={r}
                     type="button"
-                    onClick={() => setRole(r)}
+                    onClick={() => { setRole(r); setCustomRoleId(null); }}
                     className={`p-3 rounded-lg border-2 text-left transition-all ${
                       isSelected
                         ? 'border-purple-500 bg-purple-50'
@@ -128,6 +149,35 @@ export function InviteUserModal({
                 );
               })}
             </div>
+
+            {/* Custom roles */}
+            {customRoles.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Custom Roles</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {customRoles.map(cr => {
+                    const isSelected = customRoleId === cr.id;
+                    return (
+                      <button
+                        key={cr.id}
+                        type="button"
+                        onClick={() => { setCustomRoleId(cr.id); setRole('PROFESSIONAL'); }}
+                        className={`p-3 rounded-lg border-2 text-left transition-all ${
+                          isSelected
+                            ? 'border-purple-500 bg-purple-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <p className={`font-medium text-sm ${isSelected ? 'text-purple-700' : 'text-gray-900'}`}>
+                          {cr.name}
+                        </p>
+                        {cr.description && <p className="text-xs text-gray-500 mt-0.5">{cr.description}</p>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Notes */}
