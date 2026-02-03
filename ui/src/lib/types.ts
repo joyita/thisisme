@@ -47,11 +47,7 @@ export type EntryType =
   | 'BEHAVIOR'
   | 'SENSORY'
   | 'COMMUNICATION'
-  | 'SOCIAL'
-  // Progress tracking
-  | 'GOAL_SET'
-  | 'GOAL_PROGRESS'
-  | 'GOAL_ACHIEVED';
+  | 'SOCIAL';
 
 export type VisibilityLevel = 'OWNERS_ONLY' | 'PROFESSIONALS' | 'ALL' | 'CUSTOM';
 

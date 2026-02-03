@@ -54,7 +54,8 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
     togglePublish, getSectionHistory, restoreRevision, reorderSections
   } = usePassport();
 
-  const [activeTab, setActiveTab] = useState<'about' | 'preview' | 'history' | 'timeline' | 'documents' | 'sharing' | 'permissions'>('about');
+  const [activeTab, setActiveTab] = useState<'passport' | 'timeline' | 'documents' | 'sharing'>('passport');
+  const [passportSubView, setPassportSubView] = useState<'edit' | 'preview' | 'history'>('edit');
   const [activeSectionType, setActiveSectionType] = useState<SectionType>('LOVES');
 
   // Timeline state
@@ -103,10 +104,10 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
   }, [activeTab, currentPassport]);
 
   useEffect(() => {
-    if (activeTab === 'history' && currentPassport) {
+    if (activeTab === 'passport' && passportSubView === 'history' && currentPassport) {
       loadPassportHistory();
     }
-  }, [activeTab, currentPassport]);
+  }, [activeTab, passportSubView, currentPassport]);
 
   const loadTimeline = async () => {
     if (!currentPassport) return;
@@ -348,13 +349,10 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <nav className="flex gap-1 sm:gap-6 -mb-px overflow-x-auto">
             {[
-              { id: 'about', label: 'About', icon: <MdFace /> },
-              { id: 'preview', label: 'Preview', icon: <MdFace /> },
-              { id: 'history', label: 'History', icon: <MdHistory /> },
+              { id: 'passport', label: 'Passport', icon: <MdFace /> },
               { id: 'timeline', label: 'Timeline', icon: <MdTimeline /> },
               { id: 'documents', label: 'Documents', icon: <MdDescription /> },
               { id: 'sharing', label: 'Sharing', icon: <MdShare /> },
-              { id: 'permissions', label: 'Permissions', icon: <MdSecurity /> },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -381,32 +379,68 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
           </div>
         )}
 
-        {/* --- About Tab --- */}
-        {activeTab === 'about' && (
-          <SectionEditor
-            passportId={resolvedParams.id}
-            childName={currentPassport.childFirstName}
-          />
-        )}
+        {/* --- Passport Tab --- */}
+        {activeTab === 'passport' && (
+          <div>
+            {/* Sub-navigation */}
+            <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setPassportSubView('edit')}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    passportSubView === 'edit' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <MdEdit className="w-4 h-4" />
+                  Edit
+                </button>
+                <button
+                  onClick={() => setPassportSubView('preview')}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    passportSubView === 'preview' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <MdPrint className="w-4 h-4" />
+                  Preview
+                </button>
+                <button
+                  onClick={() => setPassportSubView('history')}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    passportSubView === 'history' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <MdHistory className="w-4 h-4" />
+                  History
+                </button>
+              </div>
+            </div>
 
-        {/* --- Preview Tab --- */}
-        {activeTab === 'preview' && (
-          <div className="text-center py-12">
-            <MdPrint className="w-16 h-16 text-purple-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Print-Ready Preview</h2>
-            <p className="text-gray-600 mb-6">View and print a clean, professional version of this passport</p>
-            <Link
-              href={`/passport/${resolvedParams.id}/preview`}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              <MdPrint className="w-5 h-5" />
-              Open Preview Page
-            </Link>
-          </div>
-        )}
+            {/* Edit sub-view */}
+            {passportSubView === 'edit' && (
+              <SectionEditor
+                passportId={resolvedParams.id}
+                childName={currentPassport.childFirstName}
+              />
+            )}
 
-        {/* --- History Tab --- */}
-        {activeTab === 'history' && (
+            {/* Preview sub-view */}
+            {passportSubView === 'preview' && (
+              <div className="text-center py-12">
+                <MdPrint className="w-16 h-16 text-purple-600 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Print-Ready Preview</h2>
+                <p className="text-gray-600 mb-6">View and print a clean, professional version of this passport</p>
+                <Link
+                  href={`/passport/${resolvedParams.id}/preview`}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  <MdPrint className="w-5 h-5" />
+                  Open Preview Page
+                </Link>
+              </div>
+            )}
+
+            {/* History sub-view */}
+            {passportSubView === 'history' && (
           <div>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">Passport History</h2>
@@ -493,6 +527,8 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
                     );
                   })}
               </div>
+            )}
+          </div>
             )}
           </div>
         )}
@@ -688,11 +724,12 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
         )}
 
         {activeTab === 'sharing' && (
-          <ShareLinksTab passportId={currentPassport.id} childName={currentPassport.childFirstName} />
-        )}
-
-        {activeTab === 'permissions' && (
-          <PermissionsTab passportId={currentPassport.id} />
+          <div className="space-y-8">
+            <PermissionsTab passportId={currentPassport.id} />
+            <div className="border-t border-gray-200 pt-8">
+              <ShareLinksTab passportId={currentPassport.id} childName={currentPassport.childFirstName} />
+            </div>
+          </div>
         )}
       </div>
 

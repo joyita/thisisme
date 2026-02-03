@@ -24,10 +24,5 @@ public enum EntryType {
     BEHAVIOR,
     SENSORY,
     COMMUNICATION,
-    SOCIAL,
-
-    // Progress tracking
-    GOAL_SET,
-    GOAL_PROGRESS,
-    GOAL_ACHIEVED
+    SOCIAL
 }

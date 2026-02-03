@@ -185,37 +185,6 @@ export const ENTRY_TYPE_CONFIG = {
     badgeBg: 'bg-fuchsia-100',
     badgeText: 'text-fuchsia-700',
   },
-  // Progress tracking
-  GOAL_SET: {
-    label: 'Goal Set',
-    description: 'New goal or target established',
-    color: 'sky',
-    bgColor: 'bg-sky-50',
-    textColor: 'text-sky-700',
-    borderColor: 'border-sky-200',
-    badgeBg: 'bg-sky-100',
-    badgeText: 'text-sky-700',
-  },
-  GOAL_PROGRESS: {
-    label: 'Goal Progress',
-    description: 'Update on progress towards a goal',
-    color: 'lime',
-    bgColor: 'bg-lime-50',
-    textColor: 'text-lime-700',
-    borderColor: 'border-lime-200',
-    badgeBg: 'bg-lime-100',
-    badgeText: 'text-lime-700',
-  },
-  GOAL_ACHIEVED: {
-    label: 'Goal Achieved',
-    description: 'Celebrate a completed goal!',
-    color: 'emerald',
-    bgColor: 'bg-emerald-50',
-    textColor: 'text-emerald-700',
-    borderColor: 'border-emerald-200',
-    badgeBg: 'bg-emerald-100',
-    badgeText: 'text-emerald-700',
-  },
 } as const;
 
 // Entry type categories for filtering
@@ -224,7 +193,6 @@ export const ENTRY_TYPE_CATEGORIES = {
   'Core': ['MILESTONE', 'NOTE', 'LIKE', 'DISLIKE'],
   'Professional': ['MEDICAL', 'EDUCATIONAL', 'THERAPY', 'SCHOOL_REPORT'],
   'Tracking': ['BEHAVIOR', 'SENSORY', 'COMMUNICATION', 'SOCIAL'],
-  'Goals': ['GOAL_SET', 'GOAL_PROGRESS', 'GOAL_ACHIEVED'],
 } as const;
 
 // Visibility Level Configuration

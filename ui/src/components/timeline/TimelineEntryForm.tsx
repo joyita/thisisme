@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import {
   MdClose, MdWarning, MdCelebration, MdFlag, MdNotes, MdMedicalServices, MdSchool,
   MdFavorite, MdThumbDown, MdPsychology, MdAssignment, MdMood, MdSensors,
-  MdRecordVoiceOver, MdGroups, MdTrackChanges, MdTrendingUp, MdEmojiEvents
+  MdRecordVoiceOver, MdGroups
 } from 'react-icons/md';
 import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
@@ -45,10 +45,6 @@ const entryTypeIcons: Record<EntryType, React.ReactNode> = {
   SENSORY: <MdSensors className="w-5 h-5" />,
   COMMUNICATION: <MdRecordVoiceOver className="w-5 h-5" />,
   SOCIAL: <MdGroups className="w-5 h-5" />,
-  // Progress tracking
-  GOAL_SET: <MdTrackChanges className="w-5 h-5" />,
-  GOAL_PROGRESS: <MdTrendingUp className="w-5 h-5" />,
-  GOAL_ACHIEVED: <MdEmojiEvents className="w-5 h-5" />,
 };
 
 export function TimelineEntryForm({
@@ -95,7 +91,6 @@ export function TimelineEntryForm({
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!title.trim()) newErrors.title = 'Title is required';
-    if (!content.trim()) newErrors.content = 'Content is required';
     if (!entryDate) newErrors.entryDate = 'Date is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -167,14 +162,15 @@ export function TimelineEntryForm({
                     key={type}
                     type="button"
                     onClick={() => setEntryType(type)}
-                    className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all ${
+                    className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all ${
                       isSelected
                         ? `${config.bgColor} ${config.borderColor} ${config.textColor}`
                         : 'border-gray-200 text-gray-500 hover:border-gray-300'
                     }`}
+                    title={config.label}
                   >
                     {entryTypeIcons[type]}
-                    <span className="text-xs font-medium text-center leading-tight">
+                    <span className="text-[10px] font-medium text-center leading-tight truncate w-full">
                       {config.label.split(' / ')[0]}
                     </span>
                   </button>
@@ -205,13 +201,12 @@ export function TimelineEntryForm({
 
           {/* Content */}
           <TextArea
-            label="Details"
+            label="Details (optional)"
             value={content}
             onChange={e => setContent(e.target.value)}
             placeholder="Describe what happened, how they reacted, what worked or didn't work..."
             rows={4}
             error={errors.content}
-            required
           />
 
           {/* Visibility */}
