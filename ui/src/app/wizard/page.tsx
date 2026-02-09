@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef, useId } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { usePassport } from '@/context/PassportContext';
 import { SECTIONS, WIZARD_STEPS } from '@/lib/constants';
@@ -639,6 +640,7 @@ function WizardFlow({
       {/* Footer Navigation */}
       <footer className="bg-white border-t border-purple-200/50 px-4 sm:px-6 py-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
           {!isFirstStep ? (
             <button
               type="button"
@@ -652,6 +654,13 @@ function WizardFlow({
           ) : (
             <div />
           )}
+          <Link
+            href="/dashboard"
+            className="text-sm text-gray-500 hover:text-gray-700 underline"
+          >
+            Skip for now
+          </Link>
+          </div>
           <button
             type="button"
             onClick={handleContinue}

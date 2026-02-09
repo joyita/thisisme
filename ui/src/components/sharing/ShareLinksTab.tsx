@@ -272,8 +272,6 @@ function CreateShareLinkModal({ onClose, onCreate, childName }: CreateShareLinkM
   const [expiresInDays, setExpiresInDays] = useState<number | ''>('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showTimeline, setShowTimeline] = useState(true);
-  const [showDocuments, setShowDocuments] = useState(false);
   const [selectedSections, setSelectedSections] = useState<string[]>(['LOVES', 'HATES', 'STRENGTHS', 'NEEDS']);
 
   const sectionOptions = [
@@ -292,8 +290,8 @@ function CreateShareLinkModal({ onClose, onCreate, childName }: CreateShareLinkM
       await onCreate({
         label: label.trim() || undefined,
         visibleSections: selectedSections.length > 0 ? selectedSections : undefined,
-        showTimeline,
-        showDocuments,
+        showTimeline: false,
+        showDocuments: false,
         expiresInDays: expiresInDays ? Number(expiresInDays) : undefined,
         password: password.trim() || undefined,
       });
@@ -397,28 +395,6 @@ function CreateShareLinkModal({ onClose, onCreate, childName }: CreateShareLinkM
               ))}
             </div>
           </fieldset>
-
-          {/* Additional Options */}
-          <div className="space-y-3">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showTimeline}
-                onChange={(e) => setShowTimeline(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-              />
-              <span className="text-sm text-gray-700">Include timeline entries</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showDocuments}
-                onChange={(e) => setShowDocuments(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-              />
-              <span className="text-sm text-gray-700">Include documents</span>
-            </label>
-          </div>
 
           {/* Expiration */}
           <div>

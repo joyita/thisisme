@@ -14,7 +14,8 @@ public class ShareDTO {
         boolean showTimeline,
         boolean showDocuments,
         Integer expiresInDays,
-        String password
+        String password,
+        String timelineVisibilityLevel
     ) {}
 
     public record ShareLinkResponse(
@@ -25,6 +26,7 @@ public class ShareDTO {
         Set<SectionType> visibleSections,
         boolean showTimeline,
         boolean showDocuments,
+        String timelineVisibilityLevel,
         Instant expiresAt,
         boolean isPasswordProtected,
         int accessCount,
@@ -44,7 +46,8 @@ public class ShareDTO {
 
     public record SectionInfo(
         SectionType type,
-        String content
+        String content,
+        String remedialSuggestion
     ) {}
 
     public record TimelineEntryInfo(

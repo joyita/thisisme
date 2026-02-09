@@ -75,6 +75,7 @@ public class NotificationDTO {
         return switch (type) {
             case COMMENT_ON_YOUR_ENTRY -> "Comments on your entries";
             case MENTIONED_IN_COMMENT -> "Mentions in comments";
+            case MENTIONED_IN_ENTRY -> "Mentions in entries";
             case REACTION_ON_YOUR_ENTRY -> "Reactions to your entries";
             case PERMISSION_GRANTED -> "Access granted";
             case PERMISSION_REVOKED -> "Access revoked";
@@ -86,6 +87,7 @@ public class NotificationDTO {
         return switch (type) {
             case COMMENT_ON_YOUR_ENTRY -> "When someone comments on a timeline entry you created";
             case MENTIONED_IN_COMMENT -> "When someone @mentions you in a comment";
+            case MENTIONED_IN_ENTRY -> "When someone @mentions you in a timeline entry";
             case REACTION_ON_YOUR_ENTRY -> "When someone reacts to a timeline entry you created";
             case PERMISSION_GRANTED -> "When someone shares a passport with you";
             case PERMISSION_REVOKED -> "When your access to a passport is removed";

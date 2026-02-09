@@ -1,7 +1,7 @@
 // src/components/timeline/TimelineEntryForm.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   MdClose, MdWarning, MdCelebration, MdFlag, MdNotes, MdMedicalServices, MdSchool,
   MdFavorite, MdThumbDown, MdPsychology, MdAssignment, MdMood, MdSensors,
@@ -13,7 +13,7 @@ import { VisibilitySelector } from '@/components/ui/VisibilitySelector';
 import { TagInput } from '@/components/ui/TagInput';
 import { EntryType, VisibilityLevel } from '@/lib/types';
 import { ENTRY_TYPE_CONFIG } from '@/lib/constants';
-import { timelineApi, CreateTimelineEntry, TimelineEntry } from '@/lib/api';
+import { timelineApi, CreateTimelineEntry, TimelineEntry, PassportCollaborator } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 interface TimelineEntryFormProps {
@@ -64,6 +64,11 @@ export function TimelineEntryForm({
   const [tags, setTags] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
+  const [collaborators, setCollaborators] = useState<PassportCollaborator[]>([]);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   const isEditing = !!editEntry;
 
@@ -76,6 +81,7 @@ export function TimelineEntryForm({
         setEntryDate(editEntry.entryDate.split('T')[0]);
         setVisibility(editEntry.visibilityLevel as VisibilityLevel);
         setTags(editEntry.tags);
+        setMentionedUserIds(editEntry.mentionedUserIds || []);
       } else {
         setEntryType(presetType || 'NOTE');
         setTitle('');
@@ -83,8 +89,10 @@ export function TimelineEntryForm({
         setEntryDate(new Date().toISOString().split('T')[0]);
         setVisibility('PROFESSIONALS');
         setTags([]);
+        setMentionedUserIds([]);
       }
       setErrors({});
+      timelineApi.getCollaborators(passportId).then(setCollaborators).catch(() => {});
     }
   }, [isOpen, presetType, editEntry]);
 
@@ -108,6 +116,7 @@ export function TimelineEntryForm({
         entryDate,
         visibilityLevel: visibility,
         tags,
+        mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined,
       };
 
       if (isEditing && editEntry) {
@@ -199,15 +208,67 @@ export function TimelineEntryForm({
             required
           />
 
-          {/* Content */}
-          <TextArea
-            label="Details (optional)"
-            value={content}
-            onChange={e => setContent(e.target.value)}
-            placeholder="Describe what happened, how they reacted, what worked or didn't work..."
-            rows={4}
-            error={errors.content}
-          />
+          {/* Content with @mention autocomplete */}
+          <div className="relative">
+            <TextArea
+              ref={contentRef}
+              label="Details (optional)"
+              value={content}
+              onChange={e => {
+                const val = e.target.value;
+                setContent(val);
+                const cursor = e.target.selectionStart ?? val.length;
+                const match = val.slice(0, cursor).match(/@(\w*)$/);
+                if (match) {
+                  setMentionQuery(match[1]);
+                  setShowMentionDropdown(true);
+                } else {
+                  setShowMentionDropdown(false);
+                  setMentionQuery('');
+                }
+              }}
+              onBlur={() => setTimeout(() => setShowMentionDropdown(false), 150)}
+              placeholder="Describe what happened… use @name to mention collaborators"
+              rows={4}
+              error={errors.content}
+            />
+            {showMentionDropdown && (() => {
+              const filtered = collaborators.filter(
+                c => mentionQuery === '' || c.name.toLowerCase().includes(mentionQuery.toLowerCase())
+              );
+              return (
+                <ul
+                  role="listbox"
+                  aria-label="Mention suggestions"
+                  className="absolute z-20 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto"
+                >
+                  {filtered.length === 0 ? (
+                    <li className="px-3 py-2 text-sm text-gray-400">No matching collaborators</li>
+                  ) : filtered.map(c => (
+                    <li key={c.id} role="option">
+                      <button
+                        type="button"
+                        onMouseDown={e => {
+                          e.preventDefault();
+                          const cursor = contentRef.current?.selectionStart ?? content.length;
+                          const before = content.slice(0, cursor).replace(/@(\w*)$/, `@${c.name} `);
+                          setContent(before + content.slice(cursor));
+                          setMentionedUserIds(prev => prev.includes(c.id) ? prev : [...prev, c.id]);
+                          setShowMentionDropdown(false);
+                          setMentionQuery('');
+                          contentRef.current?.focus();
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+                      >
+                        <span className="font-medium">{c.name}</span>
+                        <span className="text-gray-500 ml-2 text-xs">{c.role}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
+          </div>
 
           {/* Visibility */}
           <VisibilitySelector

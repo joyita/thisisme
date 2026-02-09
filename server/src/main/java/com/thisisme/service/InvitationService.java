@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.thisisme.model.entity.CustomRole;
 
+import org.springframework.beans.factory.annotation.Value;
+
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -31,6 +33,9 @@ public class InvitationService {
     private static final int EXPIRY_DAYS = 7;
     private static final String TOKEN_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
 
+    @Value("${app.frontend.url:http://localhost:3000}")
+    private String frontendUrl;
+
     private final InvitationRepository invitationRepository;
     private final PassportRepository passportRepository;
     private final UserRepository userRepository;
@@ -39,6 +44,7 @@ public class InvitationService {
     private final AuditService auditService;
     private final PermissionEvaluator permissionEvaluator;
     private final CustomRoleService customRoleService;
+    private final NotificationService notificationService;
 
     public InvitationService(
             InvitationRepository invitationRepository,
@@ -48,7 +54,8 @@ public class InvitationService {
             EmailService emailService,
             AuditService auditService,
             PermissionEvaluator permissionEvaluator,
-            CustomRoleService customRoleService) {
+            CustomRoleService customRoleService,
+            NotificationService notificationService) {
         this.invitationRepository = invitationRepository;
         this.passportRepository = passportRepository;
         this.userRepository = userRepository;
@@ -57,6 +64,7 @@ public class InvitationService {
         this.auditService = auditService;
         this.permissionEvaluator = permissionEvaluator;
         this.customRoleService = customRoleService;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -215,6 +223,18 @@ public class InvitationService {
                 .withDescription("Invitation accepted — " + invitation.getRole() + " permission granted")
                 .save();
 
+            try {
+                notificationService.notifyPermissionGranted(
+                    newUser.getId(),
+                    invitation.getInvitedBy(),
+                    invitation.getPassport().getId(),
+                    invitation.getPassport().getChildFirstName(),
+                    invitation.getRole().toApiName()
+                );
+            } catch (Exception e) {
+                logger.warn("Failed to send permission granted notification for invitation {}: {}", invitation.getId(), e.getMessage());
+            }
+
             logger.info("Invitation {} accepted by user {}, {} permission granted on passport {}",
                 invitation.getId(), newUser.getId(), invitation.getRole(), invitation.getPassport().getId());
         }
@@ -264,6 +284,7 @@ public class InvitationService {
     }
 
     private InvitationResponse toResponse(Invitation inv) {
+        String inviteLink = frontendUrl + "/auth/register?invite=" + inv.getToken();
         return new InvitationResponse(
             inv.getId(),
             inv.getEmail(),
@@ -273,7 +294,8 @@ public class InvitationService {
             inv.getInvitedBy().getName(),
             inv.getCreatedAt(),
             inv.getExpiresAt(),
-            inv.getNotes()
+            inv.getNotes(),
+            inviteLink
         );
     }
 

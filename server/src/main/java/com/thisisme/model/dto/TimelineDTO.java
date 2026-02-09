@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -20,7 +21,8 @@ public class TimelineDTO {
         @NotNull LocalDate entryDate,
         VisibilityLevel visibilityLevel,
         Set<Role> visibleToRoles,
-        Set<String> tags
+        Set<String> tags,
+        Set<UUID> mentionedUserIds
     ) {}
 
     public record UpdateTimelineEntryRequest(
@@ -31,7 +33,13 @@ public class TimelineDTO {
         VisibilityLevel visibilityLevel,
         Set<Role> visibleToRoles,
         Set<String> tags,
-        Boolean pinned
+        Boolean pinned,
+        Set<UUID> mentionedUserIds
+    ) {}
+
+    public record FlagEntryRequest(
+        Boolean flaggedForFollowup,
+        LocalDate followupDueDate
     ) {}
 
     public record TimelineEntryResponse(
@@ -48,12 +56,22 @@ public class TimelineDTO {
         boolean pinned,
         int attachmentCount,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        boolean flaggedForFollowup,
+        LocalDate followupDueDate,
+        Set<UUID> mentionedUserIds
     ) {}
 
     public record AuthorInfo(
         UUID id,
         String name,
+        String role
+    ) {}
+
+    public record CollaboratorInfo(
+        UUID id,
+        String name,
+        String email,
         String role
     ) {}
 
@@ -63,6 +81,8 @@ public class TimelineDTO {
         LocalDate endDate,
         Set<String> tags,
         Boolean pinnedOnly,
+        Boolean flaggedOnly,
+        String searchQuery,
         int page,
         int size
     ) {
@@ -73,7 +93,7 @@ public class TimelineDTO {
     }
 
     public record TimelinePageResponse(
-        java.util.List<TimelineEntryResponse> entries,
+        List<TimelineEntryResponse> entries,
         int currentPage,
         int totalPages,
         long totalElements,

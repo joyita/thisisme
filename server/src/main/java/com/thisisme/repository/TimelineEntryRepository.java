@@ -51,4 +51,16 @@ public interface TimelineEntryRepository extends JpaRepository<TimelineEntry, UU
     @Query("SELECT t FROM TimelineEntry t WHERE t.author.id = :authorId " +
            "AND t.deletedAt IS NULL ORDER BY t.createdAt DESC")
     Page<TimelineEntry> findByAuthorId(@Param("authorId") UUID authorId, Pageable pageable);
+
+    @Query("SELECT t FROM TimelineEntry t WHERE t.passport.id = :passportId " +
+           "AND t.flaggedForFollowup = true AND t.deletedAt IS NULL " +
+           "ORDER BY t.followupDueDate ASC NULLS LAST, t.entryDate DESC")
+    List<TimelineEntry> findFlaggedByPassportId(@Param("passportId") UUID passportId);
+
+    @Query(value = "SELECT * FROM timeline_entries WHERE passport_id = :passportId " +
+                   "AND deleted_at IS NULL " +
+                   "AND content_search_vector @@ to_tsquery('english', :query) " +
+                   "ORDER BY ts_rank(content_search_vector, to_tsquery('english', :query)) DESC",
+           nativeQuery = true)
+    List<TimelineEntry> searchByPassportId(@Param("passportId") UUID passportId, @Param("query") String query);
 }

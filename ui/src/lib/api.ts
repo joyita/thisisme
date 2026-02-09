@@ -129,6 +129,10 @@ async function refreshTokens(refreshToken: string): Promise<AuthTokens | null> {
     console.error('Token refresh failed:', e);
   }
   clearTokens();
+  // Notify the app that the session has expired so auth state can be cleared
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth:session-expired'));
+  }
   return null;
 }
 
@@ -259,9 +263,30 @@ export const passportApi = {
 
 // Timeline API
 export const timelineApi = {
-  async list(passportId: string, page = 0, size = 20) {
+  async list(passportId: string, params?: {
+    page?: number;
+    size?: number;
+    search?: string;
+    types?: string[];
+    startDate?: string;
+    endDate?: string;
+    tags?: string[];
+    pinnedOnly?: boolean;
+    flaggedOnly?: boolean;
+  }) {
+    const p = params || {};
+    const qs = new URLSearchParams();
+    qs.set('page', String(p.page ?? 0));
+    qs.set('size', String(p.size ?? 20));
+    if (p.search) qs.set('search', p.search);
+    if (p.types?.length) p.types.forEach(t => qs.append('types', t));
+    if (p.startDate) qs.set('startDate', p.startDate);
+    if (p.endDate) qs.set('endDate', p.endDate);
+    if (p.tags?.length) p.tags.forEach(t => qs.append('tags', t));
+    if (p.pinnedOnly) qs.set('pinnedOnly', 'true');
+    if (p.flaggedOnly) qs.set('flaggedOnly', 'true');
     return apiRequest<TimelinePageResponse>(
-      `/api/v1/passports/${passportId}/timeline?page=${page}&size=${size}`
+      `/api/v1/passports/${passportId}/timeline?${qs.toString()}`
     );
   },
 
@@ -289,6 +314,17 @@ export const timelineApi = {
     return apiRequest<TimelineEntry>(`/api/v1/passports/${passportId}/timeline/${entryId}/pin`, {
       method: 'POST',
     });
+  },
+
+  async flag(passportId: string, entryId: string, flaggedForFollowup: boolean, followupDueDate?: string) {
+    return apiRequest<TimelineEntry>(`/api/v1/passports/${passportId}/timeline/${entryId}/flag`, {
+      method: 'POST',
+      body: JSON.stringify({ flaggedForFollowup, followupDueDate: followupDueDate ?? null }),
+    });
+  },
+
+  async getCollaborators(passportId: string) {
+    return apiRequest<PassportCollaborator[]>(`/api/v1/passports/${passportId}/timeline/collaborators`);
   },
 };
 
@@ -564,7 +600,7 @@ export interface TimelineEntry {
   id: string;
   passportId: string;
   author: { id: string; name: string; role: string };
-  entryType: 'INCIDENT' | 'LIKE' | 'DISLIKE' | 'MILESTONE' | 'SUCCESS' | 'NOTE' | 'MEDICAL' | 'EDUCATIONAL';
+  entryType: 'INCIDENT' | 'LIKE' | 'DISLIKE' | 'MILESTONE' | 'SUCCESS' | 'NOTE' | 'MEDICAL' | 'EDUCATIONAL' | 'THERAPY' | 'SCHOOL_REPORT' | 'BEHAVIOR' | 'SENSORY' | 'COMMUNICATION' | 'SOCIAL';
   title: string;
   content: string;
   entryDate: string;
@@ -573,6 +609,10 @@ export interface TimelineEntry {
   pinned: boolean;
   attachmentCount: number;
   createdAt: string;
+  updatedAt: string;
+  flaggedForFollowup: boolean;
+  followupDueDate?: string;
+  mentionedUserIds: string[];
 }
 
 export interface CreateTimelineEntry {
@@ -582,6 +622,14 @@ export interface CreateTimelineEntry {
   entryDate: string;
   visibilityLevel?: string;
   tags?: string[];
+  mentionedUserIds?: string[];
+}
+
+export interface PassportCollaborator {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
 }
 
 export interface TimelinePageResponse {
@@ -619,6 +667,7 @@ export interface ShareLink {
   visibleSections: string[];
   showTimeline: boolean;
   showDocuments: boolean;
+  timelineVisibilityLevel?: string;
   expiresAt?: string;
   isPasswordProtected: boolean;
   accessCount: number;
@@ -632,6 +681,7 @@ export interface CreateShareLink {
   visibleSections?: string[];
   showTimeline?: boolean;
   showDocuments?: boolean;
+  timelineVisibilityLevel?: string;
   expiresInDays?: number;
   password?: string;
 }
@@ -646,7 +696,7 @@ export interface SharedPassport {
   passportId: string;
   childFirstName: string;
   childDateOfBirth?: string;
-  sections: { type: string; content: string }[];
+  sections: { type: string; content: string; remedialSuggestion?: string }[];
   timelineEntries: { title: string; content: string; entryType: string; entryDate: string }[];
   documents: { fileName: string; mimeType: string; fileSize: number }[];
 }
@@ -716,6 +766,7 @@ export interface PendingInvitation {
   createdAt: string;
   expiresAt: string;
   notes?: string;
+  inviteLink?: string;
 }
 
 // Custom role types
@@ -819,6 +870,7 @@ export const collaborationApi = {
 export type NotificationType =
   | 'COMMENT_ON_YOUR_ENTRY'
   | 'MENTIONED_IN_COMMENT'
+  | 'MENTIONED_IN_ENTRY'
   | 'REACTION_ON_YOUR_ENTRY'
   | 'PERMISSION_GRANTED'
   | 'PERMISSION_REVOKED'

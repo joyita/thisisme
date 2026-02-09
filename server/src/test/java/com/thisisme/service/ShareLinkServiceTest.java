@@ -6,6 +6,7 @@ import com.thisisme.model.entity.Passport;
 import com.thisisme.model.entity.ShareLink;
 import com.thisisme.model.entity.User;
 import com.thisisme.model.enums.SectionType;
+import com.thisisme.model.enums.VisibilityLevel;
 import com.thisisme.repository.*;
 import com.thisisme.security.PermissionEvaluator;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,7 +61,7 @@ class ShareLinkServiceTest {
             auditService
         );
 
-        ReflectionTestUtils.setField(shareLinkService, "shareBaseUrl", "https://thisisme.app/share");
+        ReflectionTestUtils.setField(shareLinkService, "frontendUrl", "http://localhost:3000");
 
         testUser = new User("Test User", "test@example.com", "hashedPassword");
         ReflectionTestUtils.setField(testUser, "id", UUID.randomUUID());
@@ -90,6 +91,7 @@ class ShareLinkServiceTest {
             true,
             false,
             30,
+            null,
             null
         );
 
@@ -120,7 +122,7 @@ class ShareLinkServiceTest {
     @Test
     void createShareLink_ShouldThrowWhenUserLacksPermission() {
         CreateShareLinkRequest request = new CreateShareLinkRequest(
-            null, null, false, false, null, null
+            null, null, false, false, null, null, null
         );
 
         when(permissionEvaluator.canCreateShareLinks(testPassport.getId(), testUser.getId())).thenReturn(false);
@@ -133,7 +135,7 @@ class ShareLinkServiceTest {
     @Test
     void createShareLink_ShouldHashPassword() {
         CreateShareLinkRequest request = new CreateShareLinkRequest(
-            null, null, false, false, null, "secret123"
+            null, null, false, false, null, "secret123", null
         );
 
         when(permissionEvaluator.canCreateShareLinks(testPassport.getId(), testUser.getId())).thenReturn(true);
@@ -232,11 +234,58 @@ class ShareLinkServiceTest {
     }
 
     @Test
+    void createShareLink_ShouldSetTimelineVisibilityLevel() {
+        CreateShareLinkRequest request = new CreateShareLinkRequest(
+            null, null, true, false, null, null, "PROFESSIONALS"
+        );
+
+        when(permissionEvaluator.canCreateShareLinks(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
+        when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
+        when(shareLinkRepository.findByToken(any())).thenReturn(Optional.empty());
+        when(shareLinkRepository.save(any(ShareLink.class))).thenAnswer(i -> {
+            ShareLink link = i.getArgument(0);
+            ReflectionTestUtils.setField(link, "id", UUID.randomUUID());
+            return link;
+        });
+
+        ShareLink result = shareLinkService.createShareLink(
+            testPassport.getId(), testUser.getId(), request, "192.168.1.1"
+        );
+
+        assertEquals(VisibilityLevel.PROFESSIONALS, result.getTimelineVisibilityLevel());
+    }
+
+    @Test
+    void createShareLink_ShouldDefaultToAllVisibilityLevel() {
+        CreateShareLinkRequest request = new CreateShareLinkRequest(
+            null, null, true, false, null, null, null
+        );
+
+        when(permissionEvaluator.canCreateShareLinks(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
+        when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
+        when(shareLinkRepository.findByToken(any())).thenReturn(Optional.empty());
+        when(shareLinkRepository.save(any(ShareLink.class))).thenAnswer(i -> {
+            ShareLink link = i.getArgument(0);
+            ReflectionTestUtils.setField(link, "id", UUID.randomUUID());
+            return link;
+        });
+
+        ShareLink result = shareLinkService.createShareLink(
+            testPassport.getId(), testUser.getId(), request, "192.168.1.1"
+        );
+
+        assertEquals(VisibilityLevel.ALL, result.getTimelineVisibilityLevel());
+    }
+
+    @Test
     void toResponse_ShouldConvertToDTO() {
         ShareLinkResponse response = shareLinkService.toResponse(testLink);
 
         assertEquals(testLink.getId(), response.id());
         assertEquals(testLink.getToken(), response.token());
         assertTrue(response.shareUrl().contains(testLink.getToken()));
+        assertEquals("ALL", response.timelineVisibilityLevel());
     }
 }

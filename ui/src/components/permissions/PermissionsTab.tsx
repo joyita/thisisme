@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { MdAdd, MdDelete, MdPerson, MdRefresh, MdEmail, MdKeyboardArrowDown, MdKeyboardArrowUp, MdEdit } from 'react-icons/md';
+import { MdAdd, MdDelete, MdPerson, MdRefresh, MdEmail, MdKeyboardArrowDown, MdKeyboardArrowUp, MdEdit, MdContentCopy } from 'react-icons/md';
 import { Button } from '@/components/ui/Button';
 import { CustomRole, PassportPermissionDetail, PendingInvitation, PermissionKey, customRolesApi, permissionsApi, invitationsApi } from '@/lib/api';
 import { ROLE_CONFIG, PERMISSION_CATEGORIES } from '@/lib/constants';
@@ -293,6 +293,22 @@ export function PermissionsTab({ passportId }: PermissionsTabProps) {
                     </div>
 
                     <div className="flex items-center gap-1">
+                      {invitation.inviteLink && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(invitation.inviteLink!);
+                              toast.success('Invite link copied');
+                            } catch {
+                              toast.error('Failed to copy link');
+                            }
+                          }}
+                          className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md"
+                          title="Copy invite link"
+                        >
+                          <MdContentCopy className="w-5 h-5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleResendInvite(invitation)}
                         className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"

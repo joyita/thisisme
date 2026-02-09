@@ -83,8 +83,20 @@ public class TimelineEntry {
     @Column(name = "tag")
     private Set<String> tags = new HashSet<>();
 
+    @ElementCollection
+    @CollectionTable(name = "timeline_entry_mentions",
+        joinColumns = @JoinColumn(name = "entry_id"))
+    @Column(name = "user_id")
+    private Set<UUID> mentionedUserIds = new HashSet<>();
+
     @Column(nullable = false)
     private boolean pinned = false;
+
+    @Column(name = "flagged", nullable = false)
+    private boolean flaggedForFollowup = false;
+
+    @Column(name = "follow_up_due_date")
+    private LocalDate followupDueDate;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
@@ -146,8 +158,17 @@ public class TimelineEntry {
     public Set<String> getTags() { return tags; }
     public void addTag(String tag) { tags.add(tag); }
 
+    public Set<UUID> getMentionedUserIds() { return mentionedUserIds; }
+    public void setMentionedUserIds(Set<UUID> mentionedUserIds) { this.mentionedUserIds = mentionedUserIds; }
+
     public boolean isPinned() { return pinned; }
     public void setPinned(boolean pinned) { this.pinned = pinned; }
+
+    public boolean isFlaggedForFollowup() { return flaggedForFollowup; }
+    public void setFlaggedForFollowup(boolean flaggedForFollowup) { this.flaggedForFollowup = flaggedForFollowup; }
+
+    public LocalDate getFollowupDueDate() { return followupDueDate; }
+    public void setFollowupDueDate(LocalDate followupDueDate) { this.followupDueDate = followupDueDate; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

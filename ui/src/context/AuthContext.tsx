@@ -41,6 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     setIsLoading(false);
+
+    // Clear auth state if token refresh fails anywhere in the app
+    const handleSessionExpired = () => setUser(null);
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {

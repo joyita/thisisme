@@ -35,8 +35,8 @@ public class ShareLinkService {
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
 
-    @Value("${app.share-link-base-url:https://thisisme.app/share}")
-    private String shareBaseUrl;
+    @Value("${app.frontend.url:http://localhost:3000}")
+    private String frontendUrl;
 
     public ShareLinkService(
             ShareLinkRepository shareLinkRepository,
@@ -84,6 +84,17 @@ public class ShareLinkService {
 
         link.setShowTimeline(request.showTimeline());
         link.setShowDocuments(request.showDocuments());
+
+        if (request.timelineVisibilityLevel() != null) {
+            try {
+                VisibilityLevel level = VisibilityLevel.valueOf(request.timelineVisibilityLevel());
+                if (level != VisibilityLevel.CUSTOM) {
+                    link.setTimelineVisibilityLevel(level);
+                }
+            } catch (IllegalArgumentException e) {
+                // Invalid value, keep default (ALL)
+            }
+        }
 
         if (request.expiresInDays() != null && request.expiresInDays() > 0) {
             link.setExpiresAt(Instant.now().plus(request.expiresInDays(), ChronoUnit.DAYS));
@@ -197,15 +208,17 @@ public class ShareLinkService {
         // Gather visible sections
         List<SectionInfo> sections = passport.getSections().stream()
             .filter(s -> link.getVisibleSections().contains(s.getType()))
-            .map(s -> new SectionInfo(s.getType(), s.getContent()))
+            .map(s -> new SectionInfo(s.getType(), s.getContent(), s.getRemedialSuggestion()))
             .collect(Collectors.toList());
 
         // Gather timeline entries if enabled
         List<TimelineEntryInfo> timelineEntries = new ArrayList<>();
         if (link.isShowTimeline()) {
-            timelineEntries = timelineRepository.findByPassportId(passport.getId(),
-                    org.springframework.data.domain.PageRequest.of(0, 100)).getContent().stream()
-                .filter(e -> e.getVisibilityLevel() == VisibilityLevel.ALL)
+            List<VisibilityLevel> allowedLevels = getAllowedVisibilityLevels(link.getTimelineVisibilityLevel());
+            timelineEntries = timelineRepository.findByPassportIdAndVisibility(
+                    passport.getId(), allowedLevels,
+                    org.springframework.data.domain.PageRequest.of(0, 100))
+                .getContent().stream()
                 .map(e -> new TimelineEntryInfo(
                     e.getTitle(),
                     e.getContent(),
@@ -244,11 +257,12 @@ public class ShareLinkService {
         return new ShareLinkResponse(
             link.getId(),
             link.getToken(),
-            shareBaseUrl + "/" + link.getToken(),
+            frontendUrl + "/share/" + link.getToken(),
             link.getLabel(),
             link.getVisibleSections(),
             link.isShowTimeline(),
             link.isShowDocuments(),
+            link.getTimelineVisibilityLevel().name(),
             link.getExpiresAt(),
             link.isPasswordProtected(),
             link.getAccessCount(),
@@ -259,6 +273,15 @@ public class ShareLinkService {
     }
 
     // Helper methods
+
+    private List<VisibilityLevel> getAllowedVisibilityLevels(VisibilityLevel threshold) {
+        return switch (threshold) {
+            case OWNERS_ONLY -> List.of(VisibilityLevel.ALL, VisibilityLevel.PROFESSIONALS, VisibilityLevel.OWNERS_ONLY);
+            case PROFESSIONALS -> List.of(VisibilityLevel.ALL, VisibilityLevel.PROFESSIONALS);
+            case ALL -> List.of(VisibilityLevel.ALL);
+            case CUSTOM -> List.of(VisibilityLevel.ALL);
+        };
+    }
 
     private String generateUniqueToken() {
         String token;

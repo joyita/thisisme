@@ -49,6 +49,8 @@ public class TimelineController {
             @RequestParam(required = false) String endDate,
             @RequestParam(required = false) Set<String> tags,
             @RequestParam(required = false) Boolean pinnedOnly,
+            @RequestParam(required = false) Boolean flaggedOnly,
+            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal principal,
@@ -60,6 +62,8 @@ public class TimelineController {
             endDate != null ? java.time.LocalDate.parse(endDate) : null,
             tags,
             pinnedOnly,
+            flaggedOnly,
+            search,
             page,
             size
         );
@@ -155,6 +159,37 @@ public class TimelineController {
         );
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{entryId}/flag")
+    public ResponseEntity<TimelineEntryResponse> flagEntry(
+            @PathVariable UUID passportId,
+            @PathVariable UUID entryId,
+            @RequestBody FlagEntryRequest request,
+            @AuthenticationPrincipal UserPrincipal principal,
+            HttpServletRequest httpRequest) {
+
+        TimelineEntryResponse response = timelineService.flagEntry(
+            entryId,
+            principal.id(),
+            request,
+            getClientIp(httpRequest)
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/collaborators")
+    public ResponseEntity<List<CollaboratorInfo>> getCollaborators(
+            @PathVariable UUID passportId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        List<CollaboratorInfo> collaborators = timelineService.getCollaborators(
+            passportId,
+            principal.id()
+        );
+
+        return ResponseEntity.ok(collaborators);
     }
 
     private String getClientIp(HttpServletRequest request) {

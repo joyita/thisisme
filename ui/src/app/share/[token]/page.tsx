@@ -3,8 +3,47 @@
 
 import { useState, useEffect, use } from 'react';
 import { shareApi, SharedPassport, ShareAccessResponse } from '@/lib/api';
-import { MdLock, MdAccessTime, MdPerson, MdFavorite, MdThumbDown, MdStar, MdHelp } from 'react-icons/md';
+import { SECTIONS } from '@/lib/constants';
+import {
+  MdLock, MdAccessTime, MdPerson, MdFavorite, MdWarning, MdStar, MdHandshake, MdFace,
+  MdCelebration, MdFlag, MdNotes, MdThumbDown, MdMedicalServices, MdSchool,
+  MdPsychology, MdAssignment, MdMood, MdSensors, MdRecordVoiceOver, MdGroups
+} from 'react-icons/md';
+import { ENTRY_TYPE_CONFIG } from '@/lib/constants';
 import { AlertCircle } from 'lucide-react';
+
+const timelineEntryIcons: Record<string, React.ReactNode> = {
+  INCIDENT: <MdWarning className="w-4 h-4" />,
+  SUCCESS: <MdCelebration className="w-4 h-4" />,
+  MILESTONE: <MdFlag className="w-4 h-4" />,
+  NOTE: <MdNotes className="w-4 h-4" />,
+  LIKE: <MdFavorite className="w-4 h-4" />,
+  DISLIKE: <MdThumbDown className="w-4 h-4" />,
+  MEDICAL: <MdMedicalServices className="w-4 h-4" />,
+  EDUCATIONAL: <MdSchool className="w-4 h-4" />,
+  THERAPY: <MdPsychology className="w-4 h-4" />,
+  SCHOOL_REPORT: <MdAssignment className="w-4 h-4" />,
+  BEHAVIOR: <MdMood className="w-4 h-4" />,
+  SENSORY: <MdSensors className="w-4 h-4" />,
+  COMMUNICATION: <MdRecordVoiceOver className="w-4 h-4" />,
+  SOCIAL: <MdGroups className="w-4 h-4" />,
+};
+
+/** Strip raw @[Name](uuid) mentions down to just the name */
+function stripMentions(text: string): string {
+  return text.replace(/@\[([^\]]+)\]\([^)]+\)/g, '$1');
+}
+
+type SectionType = 'LOVES' | 'HATES' | 'STRENGTHS' | 'NEEDS';
+
+const SECTION_ORDER: SectionType[] = ['LOVES', 'HATES', 'STRENGTHS', 'NEEDS'];
+
+const sectionColors: Record<SectionType, { bg: string; accent: string; icon: string; bullet: string }> = {
+  LOVES: { bg: 'bg-orange-50', accent: 'text-orange-700', icon: 'text-orange-600', bullet: 'text-orange-400' },
+  HATES: { bg: 'bg-amber-50', accent: 'text-amber-800', icon: 'text-amber-600', bullet: 'text-amber-400' },
+  STRENGTHS: { bg: 'bg-orange-50', accent: 'text-orange-700', icon: 'text-orange-600', bullet: 'text-orange-400' },
+  NEEDS: { bg: 'bg-amber-50', accent: 'text-amber-800', icon: 'text-amber-600', bullet: 'text-amber-400' },
+};
 
 interface SharePageProps {
   params: Promise<{ token: string }>;
@@ -72,23 +111,13 @@ export default function SharePage({ params }: SharePageProps) {
     }
   };
 
-  const getSectionIcon = (type: string) => {
+  const getSectionIcon = (type: SectionType) => {
+    const iconClass = 'text-2xl';
     switch (type) {
-      case 'LOVES': return <MdFavorite className="w-5 h-5 text-pink-500" />;
-      case 'HATES': return <MdThumbDown className="w-5 h-5 text-orange-500" />;
-      case 'STRENGTHS': return <MdStar className="w-5 h-5 text-yellow-500" />;
-      case 'NEEDS': return <MdHelp className="w-5 h-5 text-blue-500" />;
-      default: return null;
-    }
-  };
-
-  const getSectionTitle = (type: string) => {
-    switch (type) {
-      case 'LOVES': return 'Loves';
-      case 'HATES': return 'Finds Difficult';
-      case 'STRENGTHS': return 'Strengths';
-      case 'NEEDS': return 'Needs';
-      default: return type;
+      case 'LOVES': return <MdFavorite className={iconClass} />;
+      case 'HATES': return <MdWarning className={iconClass} />;
+      case 'STRENGTHS': return <MdStar className={iconClass} />;
+      case 'NEEDS': return <MdHandshake className={iconClass} />;
     }
   };
 
@@ -185,120 +214,167 @@ export default function SharePage({ params }: SharePageProps) {
     );
   }
 
-  // Display shared passport
+  // Display shared passport — matches PassportView layout
   if (sharedData) {
+    const childName = sharedData.childFirstName;
+
+    // Group sections by type
+    const sectionsByType: Record<string, typeof sharedData.sections> = {};
+    sharedData.sections.forEach(s => {
+      if (!sectionsByType[s.type]) sectionsByType[s.type] = [];
+      sectionsByType[s.type].push(s);
+    });
+
+    const renderCard = (type: SectionType) => {
+      const items = sectionsByType[type] || [];
+      const c = sectionColors[type];
+      const title = SECTIONS[type]?.title || type;
+      return (
+        <div key={type} className={`${c.bg} rounded-2xl p-[30px] h-full min-h-[200px] md:min-h-[240px]`}>
+          <div className="flex items-center gap-2 mb-4 ml-[10px]">
+            <div className={c.icon}>{getSectionIcon(type)}</div>
+            <h2 className={`text-lg md:text-xl font-black ${c.accent}`}>{title}</h2>
+          </div>
+          {items.length === 0 ? (
+            <p className="text-base text-gray-500 italic">No items shared</p>
+          ) : (
+            <ul className="space-y-2">
+              {items.map((item, i) => (
+                <li key={i} className="text-base md:text-lg text-gray-900 leading-relaxed flex gap-2">
+                  <span className={`${c.bullet} flex-shrink-0`}>•</span>
+                  <span>
+                    {item.content}
+                    {item.remedialSuggestion && (
+                      <span className="block text-[#166534] bg-green-50 px-2 py-1 rounded text-sm mt-1">✓ {item.remedialSuggestion}</span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+    };
+
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200">
-          <div className="max-w-4xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                {sharedData.childFirstName.charAt(0)}
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {sharedData.childFirstName}&apos;s Passport
-                </h1>
-                {sharedData.childDateOfBirth && (
-                  <p className="text-gray-600">
-                    Born {formatDate(sharedData.childDateOfBirth)}
-                  </p>
-                )}
+      <div className="min-h-screen bg-white">
+        {/* Header — matches PassportView */}
+        <div className="text-center py-4 border-b border-orange-100">
+          <div className="flex items-center justify-center gap-2">
+            <MdFace className="w-7 h-7 text-[#fca103]" aria-hidden="true" />
+            <h1 className="text-2xl md:text-3xl font-black bg-gradient-to-r from-orange-700 via-orange-500 to-yellow-500 bg-clip-text text-transparent">
+              <span className="capitalize">{childName}</span>&apos;s Passport
+            </h1>
+          </div>
+          <p className="text-sm text-gray-600 mt-1">A living document to help caregivers understand and support {childName}</p>
+        </div>
+
+        {/* Mobile Layout — single column */}
+        <div className="md:hidden">
+          <div className="flex flex-col items-center pt-6 pb-4">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#fca103] to-[#fce703] flex items-center justify-center border-4 border-white">
+              <MdFace className="text-3xl text-white" />
+            </div>
+          </div>
+          <div className="px-4 pb-6 space-y-4">
+            {SECTION_ORDER.map(type => renderCard(type))}
+          </div>
+        </div>
+
+        {/* Desktop Layout — 2x2 grid with centered avatar */}
+        <div className="hidden md:block px-6 py-8">
+          <div className="max-w-4xl mx-auto relative">
+            <div className="grid grid-cols-2 gap-3">
+              {SECTION_ORDER.map(type => renderCard(type))}
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#fca103] to-[#fce703] flex items-center justify-center border-[6px] border-white">
+                <MdFace className="text-4xl text-white" />
               </div>
             </div>
           </div>
-        </header>
+        </div>
 
-        <main className="max-w-4xl mx-auto px-4 py-8">
-          {/* Sections */}
-          {sharedData.sections.length > 0 && (
-            <div className="grid gap-6 md:grid-cols-2 mb-8">
-              {sharedData.sections.map((section, index) => (
+        {/* Timeline */}
+        {sharedData.timelineEntries.length > 0 && (
+          <div className="max-w-4xl mx-auto px-4 py-8">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Timeline</h2>
+            <div className="bg-white rounded-xl px-4 sm:px-6 py-4">
+              <div className="relative">
+                {/* Continuous vertical line */}
+                {sharedData.timelineEntries.length > 1 && (
+                  <span
+                    className="absolute left-[18px] top-6 bottom-6 w-0.5 bg-gray-200"
+                    aria-hidden="true"
+                  />
+                )}
+                <ul className="space-y-6">
+                  {sharedData.timelineEntries.map((entry, idx) => {
+                    const entryConfig = ENTRY_TYPE_CONFIG[entry.entryType as keyof typeof ENTRY_TYPE_CONFIG];
+                    return (
+                      <li key={idx} className="flex gap-4 relative">
+                        {/* Icon */}
+                        <div className="flex-shrink-0 relative z-10">
+                          <span className={`flex h-9 w-9 items-center justify-center rounded-full ${entryConfig?.bgColor || 'bg-gray-100'} ${entryConfig?.textColor || 'text-gray-700'} shadow-sm`}>
+                            {timelineEntryIcons[entry.entryType] || <MdNotes className="w-4 h-4" />}
+                          </span>
+                        </div>
+                        {/* Title + date */}
+                        <div className="flex-1 min-w-0 pt-1.5">
+                          <h4 className="font-semibold text-gray-900">{stripMentions(entry.title)}</h4>
+                          <time className="text-xs text-gray-400" dateTime={entry.entryDate}>
+                            {new Date(entry.entryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </time>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Documents */}
+        {sharedData.documents.length > 0 && (
+          <div className="max-w-4xl mx-auto px-4 pb-8">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Documents</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {sharedData.documents.map((doc, index) => (
                 <div
                   key={index}
-                  className="bg-white rounded-lg border border-gray-200 p-6"
+                  className="bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-3"
                 >
-                  <div className="flex items-center gap-2 mb-3">
-                    {getSectionIcon(section.type)}
-                    <h2 className="font-semibold text-gray-900">
-                      {getSectionTitle(section.type)}
-                    </h2>
+                  <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
+                    <MdPerson className="w-5 h-5 text-gray-500" />
                   </div>
-                  <p className="text-gray-700 whitespace-pre-wrap">{section.content}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 truncate">{doc.fileName}</p>
+                    <p className="text-sm text-gray-500">
+                      {(doc.fileSize / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Timeline */}
-          {sharedData.timelineEntries.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Timeline</h2>
-              <div className="space-y-4">
-                {sharedData.timelineEntries.map((entry, index) => (
-                  <div
-                    key={index}
-                    className="bg-white rounded-lg border border-gray-200 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="font-medium text-gray-900">{entry.title}</h3>
-                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-                          <MdAccessTime className="w-4 h-4" />
-                          {formatDate(entry.entryDate)}
-                          <span className="ml-2 px-2 py-0.5 bg-gray-100 rounded text-xs">
-                            {entry.entryType}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-gray-700 mt-3 whitespace-pre-wrap">{entry.content}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Documents */}
-          {sharedData.documents.length > 0 && (
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Documents</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {sharedData.documents.map((doc, index) => (
-                  <div
-                    key={index}
-                    className="bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-3"
-                  >
-                    <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
-                      <MdPerson className="w-5 h-5 text-gray-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{doc.fileName}</p>
-                      <p className="text-sm text-gray-500">
-                        {(doc.fileSize / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {sharedData.sections.length === 0 &&
-           sharedData.timelineEntries.length === 0 &&
-           sharedData.documents.length === 0 && (
+        {/* Empty state */}
+        {sharedData.sections.length === 0 &&
+         sharedData.timelineEntries.length === 0 &&
+         sharedData.documents.length === 0 && (
+          <div className="max-w-4xl mx-auto px-4 py-12">
             <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
               <p className="text-gray-500">No content has been shared via this link.</p>
             </div>
-          )}
-        </main>
+          </div>
+        )}
 
-        {/* Footer */}
-        <footer className="border-t border-gray-200 bg-white mt-8">
-          <div className="max-w-4xl mx-auto px-4 py-6 text-center text-sm text-gray-500">
-            Shared via <span className="font-semibold text-purple-600">This Is Me</span> passport
+        {/* Footer — matches PassportView */}
+        <footer className="py-3 px-4 border-t border-orange-100 bg-orange-50/50">
+          <div className="max-w-4xl mx-auto text-center text-xs text-gray-600">
+            <span className="text-gray-500">Pupil Passport</span>
           </div>
         </footer>
       </div>

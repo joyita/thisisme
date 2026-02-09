@@ -1,6 +1,7 @@
 package com.thisisme.model.entity;
 
 import com.thisisme.model.enums.SectionType;
+import com.thisisme.model.enums.VisibilityLevel;
 import jakarta.persistence.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -58,6 +59,13 @@ public class ShareLink {
      */
     @Column(nullable = false)
     private boolean showTimeline = false;
+
+    /**
+     * Which visibility level of timeline entries to include
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "timeline_visibility_level", nullable = false)
+    private VisibilityLevel timelineVisibilityLevel = VisibilityLevel.ALL;
 
     /**
      * Whether documents are visible via this link
@@ -120,6 +128,9 @@ public class ShareLink {
 
     public boolean isShowTimeline() { return showTimeline; }
     public void setShowTimeline(boolean showTimeline) { this.showTimeline = showTimeline; }
+
+    public VisibilityLevel getTimelineVisibilityLevel() { return timelineVisibilityLevel; }
+    public void setTimelineVisibilityLevel(VisibilityLevel timelineVisibilityLevel) { this.timelineVisibilityLevel = timelineVisibilityLevel; }
 
     public boolean isShowDocuments() { return showDocuments; }
     public void setShowDocuments(boolean showDocuments) { this.showDocuments = showDocuments; }

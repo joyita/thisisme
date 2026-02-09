@@ -1,7 +1,7 @@
 // src/app/passport/[id]/page.tsx
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -29,7 +29,11 @@ import {
   MdFavorite, MdWarning, MdStar, MdHandshake, MdTimeline, MdShare,
   MdDescription, MdSecurity, MdCalendarMonth, MdViewList,
   MdBarChart, MdMoreVert, MdPublish, MdUnpublished, MdHistory,
-  MdArrowUpward, MdArrowDownward, MdExpandMore, MdExpandLess, MdPrint
+  MdArrowUpward, MdArrowDownward, MdExpandMore, MdExpandLess, MdPrint,
+  MdSearch, MdBookmark, MdBookmarkBorder,
+  MdCelebration, MdFlag, MdNotes, MdMedicalServices, MdSchool,
+  MdThumbDown, MdPsychology, MdAssignment, MdMood, MdSensors,
+  MdRecordVoiceOver, MdGroups
 } from 'react-icons/md';
 import toast from 'react-hot-toast';
 
@@ -43,6 +47,34 @@ const sectionConfig: Record<SectionType, { title: string; icon: React.ReactNode;
   STRENGTHS: { title: 'Strengths', icon: <MdStar className="w-4 h-4" />, bg: 'bg-green-50', accent: 'text-green-700' },
   NEEDS: { title: 'Needs', icon: <MdHandshake className="w-4 h-4" />, bg: 'bg-blue-50', accent: 'text-blue-700' },
 };
+
+const timelineEntryIcons: Record<string, React.ReactNode> = {
+  INCIDENT: <MdWarning className="w-4 h-4" />,
+  SUCCESS: <MdCelebration className="w-4 h-4" />,
+  MILESTONE: <MdFlag className="w-4 h-4" />,
+  NOTE: <MdNotes className="w-4 h-4" />,
+  LIKE: <MdFavorite className="w-4 h-4" />,
+  DISLIKE: <MdThumbDown className="w-4 h-4" />,
+  MEDICAL: <MdMedicalServices className="w-4 h-4" />,
+  EDUCATIONAL: <MdSchool className="w-4 h-4" />,
+  THERAPY: <MdPsychology className="w-4 h-4" />,
+  SCHOOL_REPORT: <MdAssignment className="w-4 h-4" />,
+  BEHAVIOR: <MdMood className="w-4 h-4" />,
+  SENSORY: <MdSensors className="w-4 h-4" />,
+  COMMUNICATION: <MdRecordVoiceOver className="w-4 h-4" />,
+  SOCIAL: <MdGroups className="w-4 h-4" />,
+};
+
+function highlightText(text: string, query: string) {
+  if (!query.trim()) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <mark key={i} className="bg-yellow-200 text-yellow-900 rounded px-0.5">{part}</mark>
+    ) : part
+  );
+}
 
 export default function PassportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -67,6 +99,12 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [entryFormPreset, setEntryFormPreset] = useState<EntryType | undefined>();
   const [editingEntry, setEditingEntry] = useState<TimelineEntry | undefined>();
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
+  const [flagPopoverEntryId, setFlagPopoverEntryId] = useState<string | null>(null);
+  const [flagDueDate, setFlagDueDate] = useState('');
 
   // About tab state
   const [editingSection, setEditingSection] = useState<{ id: string; content: string; remedialSuggestion: string } | null>(null);
@@ -97,30 +135,42 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
     }
   }, [authLoading, isAuthenticated, resolvedParams.id, router]);
 
+  // Debounce search input → searchQuery (300 ms)
   useEffect(() => {
-    if (activeTab === 'timeline' && currentPassport) {
+    const t = setTimeout(() => setSearchQuery(searchInput), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const loadTimeline = useCallback(async () => {
+    if (!currentPassport) return;
+    setTimelineLoading(true);
+    try {
+      const response = await timelineApi.list(currentPassport.id, {
+        search: searchQuery || undefined,
+        types: selectedTypes.length > 0 ? selectedTypes : undefined,
+        startDate: dateRange?.start,
+        endDate: dateRange?.end,
+        flaggedOnly: flaggedOnly || undefined,
+      });
+      setTimeline(response.entries);
+    } catch {
+      toast.error('Failed to load timeline');
+    } finally {
+      setTimelineLoading(false);
+    }
+  }, [currentPassport, searchQuery, selectedTypes, dateRange, flaggedOnly]);
+
+  useEffect(() => {
+    if (activeTab === 'timeline') {
       loadTimeline();
     }
-  }, [activeTab, currentPassport]);
+  }, [activeTab, loadTimeline]);
 
   useEffect(() => {
     if (activeTab === 'passport' && passportSubView === 'history' && currentPassport) {
       loadPassportHistory();
     }
   }, [activeTab, passportSubView, currentPassport]);
-
-  const loadTimeline = async () => {
-    if (!currentPassport) return;
-    setTimelineLoading(true);
-    try {
-      const response = await timelineApi.list(currentPassport.id);
-      setTimeline(response.entries);
-    } catch (err) {
-      toast.error('Failed to load timeline');
-    } finally {
-      setTimelineLoading(false);
-    }
-  };
 
   const loadPassportHistory = async () => {
     if (!currentPassport) return;
@@ -280,6 +330,35 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
       loadTimeline();
     } catch (err) {
       toast.error('Failed to delete entry');
+    }
+  };
+
+  const handleToggleFlag = async (entry: TimelineEntry) => {
+    if (!currentPassport) return;
+    if (entry.flaggedForFollowup) {
+      // Unflag directly
+      try {
+        await timelineApi.flag(currentPassport.id, entry.id, false);
+        loadTimeline();
+      } catch {
+        toast.error('Failed to remove flag');
+      }
+    } else {
+      // Open popover to optionally set due date
+      setFlagPopoverEntryId(entry.id);
+      setFlagDueDate('');
+    }
+  };
+
+  const handleConfirmFlag = async (entryId: string) => {
+    if (!currentPassport) return;
+    try {
+      await timelineApi.flag(currentPassport.id, entryId, true, flagDueDate || undefined);
+      setFlagPopoverEntryId(null);
+      setFlagDueDate('');
+      loadTimeline();
+    } catch {
+      toast.error('Failed to flag entry');
     }
   };
 
@@ -552,6 +631,19 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
               </div>
             </div>
 
+            {/* Search */}
+            <div className="relative mb-4">
+              <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
+                placeholder="Search entries…"
+                className="w-full sm:w-80 pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                aria-label="Search timeline entries"
+              />
+            </div>
+
             {/* View toggle and filters */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               {/* View toggle */}
@@ -585,17 +677,34 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
                 </button>
               </div>
 
-              {/* Filters */}
-              <TimelineFilters
-                selectedTypes={selectedTypes}
-                onTypesChange={setSelectedTypes}
-                dateRange={dateRange}
-                onDateRangeChange={setDateRange}
-                onClear={() => {
-                  setSelectedTypes([]);
-                  setDateRange(null);
-                }}
-              />
+              {/* Filters + flagged toggle */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setFlaggedOnly(!flaggedOnly)}
+                  aria-pressed={flaggedOnly}
+                  className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-lg border-2 font-medium text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-600 ${
+                    flaggedOnly
+                      ? 'border-amber-500 bg-amber-50 text-amber-800'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <MdBookmark className="w-5 h-5" aria-hidden="true" />
+                  Flagged
+                </button>
+                <TimelineFilters
+                  selectedTypes={selectedTypes}
+                  onTypesChange={setSelectedTypes}
+                  dateRange={dateRange}
+                  onDateRangeChange={setDateRange}
+                  onClear={() => {
+                    setSelectedTypes([]);
+                    setDateRange(null);
+                    setSearchInput('');
+                    setSearchQuery('');
+                    setFlaggedOnly(false);
+                  }}
+                />
+              </div>
             </div>
 
             {timelineLoading ? (
@@ -616,94 +725,158 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
             ) : (
               <>
                 {(() => {
-                  const filteredEntries = timeline.filter(entry => {
-                    if (selectedTypes.length > 0 && !selectedTypes.includes(entry.entryType)) {
-                      return false;
-                    }
-                    if (dateRange) {
-                      const entryDate = new Date(entry.entryDate);
-                      const start = new Date(dateRange.start);
-                      const end = new Date(dateRange.end);
-                      if (entryDate < start || entryDate > end) {
-                        return false;
-                      }
-                    }
-                    return true;
-                  });
-
                   if (timelineView === 'calendar') {
                     return (
                       <TimelineCalendar
-                        entries={filteredEntries}
+                        entries={timeline}
                         onEntryClick={openEditForm}
-                        onDateClick={() => {
-                          openEntryForm();
-                        }}
+                        onDateClick={() => openEntryForm()}
                       />
                     );
                   }
 
                   if (timelineView === 'analytics') {
-                    return <TimelineAnalytics entries={filteredEntries} />;
+                    return <TimelineAnalytics entries={timeline} />;
                   }
 
-                  // List view
+                  // Vertical list view
+                  const CONTENT_LIMIT = 200;
                   return (
-                    <div className="space-y-4">
-                      {filteredEntries.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500">
+                    <div className="bg-white rounded-xl px-4 py-2 sm:px-6">
+                    <ul className="space-y-0" aria-label="Timeline entries">
+                      {timeline.length === 0 ? (
+                        <li className="text-center py-8 text-gray-500">
                           No entries match your filters
-                        </div>
+                        </li>
                       ) : (
-                        filteredEntries.map(entry => {
+                        timeline.map((entry, idx) => {
                           const entryConfig = ENTRY_TYPE_CONFIG[entry.entryType];
+                          const isExpanded = expandedEntries.has(entry.id);
+                          const isLong = entry.content.length > CONTENT_LIMIT;
+                          const displayContent = isLong && !isExpanded
+                            ? entry.content.slice(0, CONTENT_LIMIT) + '…'
+                            : entry.content;
                           return (
-                            <div key={entry.id} className={`bg-white rounded-lg border-2 ${entryConfig?.borderColor || 'border-gray-200'} p-4`}>
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded mb-2 ${entryConfig?.badgeBg || 'bg-gray-100'} ${entryConfig?.badgeText || 'text-gray-700'}`}>
-                                    {entryConfig?.label || entry.entryType}
-                                  </span>
-                                  <h4 className="font-semibold text-gray-900">{entry.title}</h4>
-                                  <p className="text-sm text-gray-600 mt-1">{entry.content}</p>
-                                </div>
-                                <div className="flex items-start gap-2 ml-4">
-                                  <span className="text-xs text-gray-400 whitespace-nowrap">
-                                    {new Date(entry.entryDate).toLocaleDateString()}
-                                  </span>
-                                  <div className="flex gap-1">
+                            <li key={entry.id} className="flex gap-3 group -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 rounded-lg hover:bg-gray-50 transition-colors">
+                              {/* Icon + connecting line */}
+                              <div className="flex flex-col items-center flex-shrink-0">
+                                <span className={`flex h-9 w-9 items-center justify-center rounded-full ${entryConfig?.bgColor || 'bg-gray-100'} ${entryConfig?.textColor || 'text-gray-700'} ring-4 ring-white shadow-sm`}>
+                                  {timelineEntryIcons[entry.entryType]}
+                                </span>
+                                {idx < timeline.length - 1 && (
+                                  <span className="w-0.5 flex-1 bg-gray-200 my-1" aria-hidden="true" />
+                                )}
+                              </div>
+                              {/* Content */}
+                              <div className="flex-1 min-w-0 pt-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-baseline gap-2 flex-wrap">
+                                      <h4 className="font-semibold text-gray-900">
+                                        {highlightText(entry.title, searchQuery)}
+                                      </h4>
+                                      <time className="text-xs text-gray-400 whitespace-nowrap" dateTime={entry.entryDate}>
+                                        {new Date(entry.entryDate).toLocaleDateString()}
+                                      </time>
+                                      {entry.flaggedForFollowup && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 rounded-full">
+                                          <MdBookmark className="w-3 h-3" aria-hidden="true" />
+                                          {entry.followupDueDate
+                                            ? `Follow up ${new Date(entry.followupDueDate).toLocaleDateString()}`
+                                            : 'Follow up'}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {entry.content && (
+                                      <p className="mt-1 text-sm text-gray-500 font-normal leading-relaxed">
+                                        {highlightText(displayContent, searchQuery)}
+                                      </p>
+                                    )}
+                                    {isLong && (
+                                      <button
+                                        onClick={() => setExpandedEntries(prev => {
+                                          const next = new Set(prev);
+                                          isExpanded ? next.delete(entry.id) : next.add(entry.id);
+                                          return next;
+                                        })}
+                                        className="mt-1 text-xs text-purple-700 hover:text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-600 rounded"
+                                      >
+                                        {isExpanded ? 'Show less' : 'Show more'}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-col items-end flex-shrink-0">
+                                  <div className={`flex gap-0.5 transition-opacity ${flagPopoverEntryId === entry.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                    <button
+                                      onClick={() => handleToggleFlag(entry)}
+                                      title={entry.flaggedForFollowup ? 'Remove follow-up flag' : 'Flag for follow-up'}
+                                      aria-pressed={entry.flaggedForFollowup}
+                                      className={`p-1 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                                        entry.flaggedForFollowup
+                                          ? 'text-amber-600 hover:text-amber-800'
+                                          : 'text-gray-400 hover:text-amber-600'
+                                      }`}
+                                    >
+                                      {entry.flaggedForFollowup
+                                        ? <MdBookmark className="w-4 h-4" />
+                                        : <MdBookmarkBorder className="w-4 h-4" />}
+                                    </button>
                                     <button
                                       onClick={() => openEditForm(entry)}
-                                      className="p-1 text-gray-400 hover:text-gray-600"
+                                      className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-600 rounded"
                                       title="Edit entry"
                                     >
                                       <MdEdit className="w-4 h-4" />
                                     </button>
                                     <button
                                       onClick={() => handleDeleteEntry(entry.id)}
-                                      className="p-1 text-gray-400 hover:text-red-600"
+                                      className="p-1 text-gray-400 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
                                       title="Delete entry"
                                     >
                                       <MdDelete className="w-4 h-4" />
                                     </button>
                                   </div>
+                                  {flagPopoverEntryId === entry.id && (
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap justify-end">
+                                      <input
+                                        type="date"
+                                        value={flagDueDate}
+                                        onChange={e => setFlagDueDate(e.target.value)}
+                                        aria-label="Follow-up due date"
+                                        className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                      />
+                                      <button
+                                        onClick={() => handleConfirmFlag(entry.id)}
+                                        className="px-3 py-1 text-sm bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors"
+                                      >
+                                        Flag
+                                      </button>
+                                      <button
+                                        onClick={() => setFlagPopoverEntryId(null)}
+                                        className="px-3 py-1 text-sm text-gray-500 hover:text-gray-700"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  )}
+                                  </div>
                                 </div>
+                                {entry.tags.length > 0 && (
+                                  <div className="flex gap-1 mt-2 flex-wrap">
+                                    {entry.tags.map(tag => (
+                                      <span key={tag} className="px-2 py-0.5 text-xs text-gray-400">
+                                        #{tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                <EntryCollaboration entryId={entry.id} />
                               </div>
-                              {entry.tags.length > 0 && (
-                                <div className="flex gap-1 mt-3">
-                                  {entry.tags.map(tag => (
-                                    <span key={tag} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                              {/* Collaboration: Reactions & Comments */}
-                              <EntryCollaboration entryId={entry.id} />
-                            </div>
+                            </li>
                           );
                         })
                       )}
+                    </ul>
                     </div>
                   );
                 })()}

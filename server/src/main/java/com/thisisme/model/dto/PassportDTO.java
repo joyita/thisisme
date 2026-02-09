@@ -177,7 +177,8 @@ public class PassportDTO {
         String invitedByName,
         Instant createdAt,
         Instant expiresAt,
-        String notes
+        String notes,
+        String inviteLink
     ) {}
 
     // Custom-role DTOs
