@@ -217,6 +217,28 @@ public class PassportPermission {
                 canDownloadDocuments = true;
                 canDeleteDocuments = false;
             }
+            case CHILD -> {
+                canViewPassport = true;
+                canEditPassport = false;
+                canDeletePassport = false;
+                canManagePermissions = false;
+                canCreateShareLinks = false;
+                canViewSections = true;
+                canEditSections = true;  // service layer enforces PENDING_REVIEW
+                canDeleteSections = false;
+                canPublishSections = false;
+                canReorderSections = false;
+                canViewTimeline = true;
+                canAddTimelineEntries = true;  // service layer enforces PENDING_REVIEW
+                canEditTimelineEntries = false;
+                canDeleteTimelineEntries = false;
+                canCommentOnTimeline = false;
+                canReactOnTimeline = true;
+                canViewDocuments = false;
+                canUploadDocuments = false;
+                canDownloadDocuments = false;
+                canDeleteDocuments = false;
+            }
         }
     }
 

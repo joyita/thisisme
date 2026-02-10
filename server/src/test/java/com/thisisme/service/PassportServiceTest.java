@@ -39,6 +39,7 @@ class PassportServiceTest {
     @Mock private SectionRevisionRepository sectionRevisionRepository;
     @Mock private InvitationService invitationService;
     @Mock private CustomRoleService customRoleService;
+    @Mock private TimelineEntryRepository timelineEntryRepository;
 
     private PassportService passportService;
     private User testUser;
@@ -54,7 +55,7 @@ class PassportServiceTest {
             consentService,
             auditService,
             permissionEvaluator,
-            objectMapper, notificationService, sectionRevisionRepository, invitationService, customRoleService
+            objectMapper, notificationService, sectionRevisionRepository, invitationService, customRoleService, timelineEntryRepository
         );
 
         testUser = new User("Test User", "test@example.com", "hashedPassword");
@@ -181,7 +182,8 @@ class PassportServiceTest {
             SectionType.LOVES,
             "Loves dinosaurs",
             null,
-            VisibilityLevel.ALL
+            VisibilityLevel.ALL,
+            null
         );
 
         when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));

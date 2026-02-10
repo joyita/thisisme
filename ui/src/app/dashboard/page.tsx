@@ -12,7 +12,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, logout, isChildAccount } = useAuth();
   const { passports, isLoading: passportsLoading, createPassport, error } = usePassport();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [childName, setChildName] = useState('');
@@ -22,8 +22,13 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       router.push('/auth/login');
+      return;
     }
-  }, [authLoading, isAuthenticated, router]);
+    // Child accounts should not access dashboard
+    if (!authLoading && isChildAccount && user?.passportId) {
+      router.push(`/passport/${user.passportId}`);
+    }
+  }, [authLoading, isAuthenticated, isChildAccount, user, router]);
 
   const handleLogout = async () => {
     await logout();
@@ -136,10 +141,12 @@ export default function DashboardPage() {
                     <p className="text-sm text-purple-600 capitalize">{passport.role?.toLowerCase() || 'owner'}</p>
                   </div>
                 </div>
-                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-500">
-                  <MdCalendarToday className="w-4 h-4" />
-                  <span>Created {new Date(passport.createdAt).toLocaleDateString()}</span>
-                </div>
+                {(passport.createdAt || passport.updatedAt) && (
+                  <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-500">
+                    <MdCalendarToday className="w-4 h-4" />
+                    <span>Created {new Date(passport.createdAt || passport.updatedAt!).toLocaleDateString()}</span>
+                  </div>
+                )}
               </Link>
             ))}
           </div>
@@ -148,13 +155,16 @@ export default function DashboardPage() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-xl">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Create New Passport</h3>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="bg-white rounded-md w-full max-w-md p-6 sm:p-8 shadow-sm">
+            <div className="mb-5 sm:mb-6">
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Create New Passport</h3>
+              <p className="text-sm text-gray-600 mt-1">Start documenting what makes your child unique.</p>
+            </div>
 
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="childName" className="block text-sm font-medium text-gray-700 mb-1">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="space-y-1">
+                <label htmlFor="childName" className="block text-sm font-medium text-gray-700">
                   Child&apos;s first name<span className="text-[#be185d] ml-0.5">*</span>
                 </label>
                 <input
@@ -163,43 +173,46 @@ export default function DashboardPage() {
                   value={childName}
                   onChange={(e) => setChildName(e.target.value)}
                   placeholder="Enter child's first name"
-                  className="w-full px-3 py-2.5 rounded-lg border-2 bg-white text-base text-gray-900 border-gray-300 focus:border-purple-500 focus:outline-none focus:ring-4 focus:ring-purple-200/50 transition-all"
                   autoFocus
+                  disabled={creating}
+                  className="w-full px-3 py-2.5 rounded-md border-2 bg-white text-base text-gray-900 border-gray-300 hover:border-gray-400 focus:border-[#be185d] focus:outline-none focus:ring-4 focus:ring-pink-200/50 transition-all min-h-[48px] placeholder:text-gray-500 disabled:opacity-50"
                 />
               </div>
 
-              <div>
-                <label htmlFor="childDob" className="block text-sm font-medium text-gray-700 mb-1">
-                  Date of birth (optional)
+              <div className="space-y-1">
+                <label htmlFor="childDob" className="block text-sm font-medium text-gray-700">
+                  Date of birth <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
                 <input
                   id="childDob"
                   type="date"
                   value={childDob}
                   onChange={(e) => setChildDob(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border-2 bg-white text-base text-gray-900 border-gray-300 focus:border-purple-500 focus:outline-none focus:ring-4 focus:ring-purple-200/50 transition-all"
+                  disabled={creating}
+                  className="w-full px-3 py-2.5 rounded-md border-2 bg-white text-base text-gray-900 border-gray-300 hover:border-gray-400 focus:border-[#be185d] focus:outline-none focus:ring-4 focus:ring-pink-200/50 transition-all min-h-[48px] placeholder:text-gray-500 disabled:opacity-50"
                 />
               </div>
             </div>
 
             <div className="flex gap-3 mt-6">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => {
                   setShowCreateModal(false);
                   setChildName('');
                   setChildDob('');
                 }}
-                className="flex-1 px-4 py-2.5 rounded-lg border-2 border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                className="flex-1"
                 disabled={creating}
               >
                 Cancel
-              </button>
+              </Button>
               <Button
                 onClick={handleCreatePassport}
                 className="flex-1"
                 disabled={creating || !childName.trim()}
               >
-                {creating ? 'Creating...' : 'Create'}
+                {creating ? 'Creating...' : 'Create Passport'}
               </Button>
             </div>
           </div>

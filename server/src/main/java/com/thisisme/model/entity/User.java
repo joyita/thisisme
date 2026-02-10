@@ -1,5 +1,6 @@
 package com.thisisme.model.entity;
 
+import com.thisisme.model.enums.AccountType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -44,6 +45,10 @@ public class User {
 
     @Column
     private Instant emailVerifiedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private AccountType accountType = AccountType.STANDARD;
 
     @Column(nullable = false)
     private boolean active = true;
@@ -98,6 +103,9 @@ public class User {
     }
 
     public Instant getEmailVerifiedAt() { return emailVerifiedAt; }
+
+    public AccountType getAccountType() { return accountType; }
+    public void setAccountType(AccountType accountType) { this.accountType = accountType; }
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }

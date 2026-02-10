@@ -1,5 +1,6 @@
 package com.thisisme.model.entity;
 
+import com.thisisme.model.enums.ContentStatus;
 import com.thisisme.model.enums.SectionType;
 import com.thisisme.model.enums.VisibilityLevel;
 import jakarta.persistence.*;
@@ -51,6 +52,13 @@ public class PassportSection {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_id", nullable = false)
     private User createdBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ContentStatus status = ContentStatus.PUBLISHED;
+
+    @Column(nullable = false)
+    private boolean childModeContribution = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "last_edited_by_id")
@@ -105,6 +113,12 @@ public class PassportSection {
     public User getCreatedBy() { return createdBy; }
     public User getLastEditedBy() { return lastEditedBy; }
     public void setLastEditedBy(User lastEditedBy) { this.lastEditedBy = lastEditedBy; }
+
+    public ContentStatus getStatus() { return status; }
+    public void setStatus(ContentStatus status) { this.status = status; }
+
+    public boolean isChildModeContribution() { return childModeContribution; }
+    public void setChildModeContribution(boolean childModeContribution) { this.childModeContribution = childModeContribution; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

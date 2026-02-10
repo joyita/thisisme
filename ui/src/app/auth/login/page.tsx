@@ -1,7 +1,7 @@
 // src/app/auth/login/page.tsx
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -10,10 +10,21 @@ import { MdFace } from 'react-icons/md';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isLoading, error, clearError } = useAuth();
+  const { login, isLoading, error, clearError, user, isChildAccount } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState('');
+
+  // Redirect after login based on account type
+  useEffect(() => {
+    if (user) {
+      if (isChildAccount && user.passportId) {
+        router.push(`/passport/${user.passportId}`);
+      } else {
+        router.push('/dashboard');
+      }
+    }
+  }, [user, isChildAccount, router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -31,7 +42,7 @@ export default function LoginPage() {
 
     try {
       await login(email.trim(), password);
-      router.push('/dashboard');
+      // Redirect handled in useEffect below after user state updates
     } catch (err: any) {
       // Error is handled by AuthContext
     }
@@ -58,16 +69,16 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-5">
             <div className="space-y-1">
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address<span className="text-[#be185d] ml-0.5">*</span>
+                Email or Username<span className="text-[#be185d] ml-0.5">*</span>
               </label>
               <input
                 id="email"
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="you@example.com or username"
                 required
-                autoComplete="email"
+                autoComplete="username"
                 disabled={isLoading}
                 className="w-full px-3 py-2.5 rounded-md border-2 bg-white text-base text-gray-900 border-gray-300 hover:border-gray-400 focus:border-[#be185d] focus:outline-none focus:ring-4 focus:ring-pink-200/50 transition-all min-h-[48px] placeholder:text-gray-500 disabled:opacity-50"
               />

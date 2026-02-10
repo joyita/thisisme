@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
+import { useChildMode } from './ChildModeContext';
 import { passportApi, Passport, PassportListItem, PassportSection } from '@/lib/api';
 import { SectionRevision } from '@/lib/types';
 import { cachePassport, getCachedPassport, getPendingChanges, addPendingChange, clearPendingChanges } from '@/lib/storage';
@@ -33,13 +34,20 @@ const PassportContext = createContext<PassportContextType | null>(null);
 const DEBOUNCE_MS = 500;
 
 export function PassportProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isChildAccount } = useAuth();
+  const { isChildMode } = useChildMode();
   const [passports, setPassports] = useState<PassportListItem[]>([]);
   const [currentPassport, setCurrentPassport] = useState<Passport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof window !== 'undefined' ? !window.navigator.onLine : false);
   const [error, setError] = useState<string | null>(null);
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // Refs to avoid stale closures in callbacks
+  const isChildModeRef = useRef(isChildMode);
+  isChildModeRef.current = isChildMode;
+  const isChildAccountRef = useRef(isChildAccount);
+  isChildAccountRef.current = isChildAccount;
 
   // Online/offline event handling with pending-change flush
   useEffect(() => {
@@ -129,8 +137,9 @@ export function PassportProvider({ children }: { children: ReactNode }) {
   const loadPassport = useCallback(async (id: string) => {
     setIsLoading(true);
     setError(null);
+    const useChildView = isChildModeRef.current || isChildAccountRef.current;
     try {
-      const passport = await passportApi.get(id);
+      const passport = await passportApi.get(id, useChildView);
       setCurrentPassport(passport);
       cachePassport(passport);
     } catch (e: any) {
@@ -231,7 +240,10 @@ export function PassportProvider({ children }: { children: ReactNode }) {
 
     const performUpdate = async () => {
       try {
-        const updated = await passportApi.updateSection(passportId, sectionId, updates);
+        const finalUpdates = (isChildModeRef.current || isChildAccountRef.current)
+          ? { ...updates, childModeContribution: true }
+          : updates;
+        const updated = await passportApi.updateSection(passportId, sectionId, finalUpdates);
         setCurrentPassport(prev => {
           if (!prev || prev.id !== passportId) return prev;
           const newSections: Record<string, PassportSection[]> = {};

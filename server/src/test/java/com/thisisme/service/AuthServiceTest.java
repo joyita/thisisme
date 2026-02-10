@@ -4,6 +4,7 @@ import com.thisisme.model.dto.AuthResponse;
 import com.thisisme.model.dto.LoginRequest;
 import com.thisisme.model.dto.RegisterRequest;
 import com.thisisme.model.entity.User;
+import com.thisisme.repository.PassportRepository;
 import com.thisisme.repository.UserRepository;
 import com.thisisme.security.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,9 @@ class AuthServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private PassportRepository passportRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Mock
@@ -48,7 +52,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder, tokenProvider, auditService, invitationService);
+        authService = new AuthService(userRepository, passportRepository, passwordEncoder, tokenProvider, auditService, invitationService);
 
         // Setup audit service mock chain
         lenient().when(auditService.log(any(), any(), any(), any())).thenReturn(auditLogBuilder);

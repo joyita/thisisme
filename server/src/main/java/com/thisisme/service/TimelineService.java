@@ -7,6 +7,7 @@ import com.thisisme.model.entity.PassportPermission;
 import com.thisisme.model.entity.TimelineEntry;
 import com.thisisme.model.entity.User;
 import com.thisisme.model.enums.AuditAction;
+import com.thisisme.model.enums.ContentStatus;
 import com.thisisme.model.enums.EntryType;
 import com.thisisme.model.enums.NotificationType;
 import com.thisisme.model.enums.Role;
@@ -105,6 +106,13 @@ public class TimelineService {
             entry.setMetadata(request.metadata());
         }
 
+        // Child role or child-mode contributions require review
+        Role userRole = permissionEvaluator.getRole(passportId, userId);
+        if (userRole == Role.CHILD || Boolean.TRUE.equals(request.childModeContribution())) {
+            entry.setStatus(ContentStatus.PENDING_REVIEW);
+            entry.setChildModeContribution(true);
+        }
+
         TimelineEntry saved = timelineRepository.save(entry);
 
         auditService.log(AuditAction.TIMELINE_ENTRY_CREATED, userId, author.getName(), ipAddress)
@@ -175,6 +183,78 @@ public class TimelineService {
             entriesPage.hasNext(),
             entriesPage.hasPrevious()
         );
+    }
+
+    /**
+     * Get timeline entries with child view filtering
+     */
+    @Transactional(readOnly = true)
+    public TimelinePageResponse getTimelineEntries(UUID passportId, UUID userId,
+                                                   TimelineFilterRequest filter, String ipAddress,
+                                                   boolean childView) {
+        if (!childView) {
+            return getTimelineEntries(passportId, userId, filter, ipAddress);
+        }
+
+        if (!permissionEvaluator.canViewTimeline(passportId, userId)) {
+            throw new SecurityException("You don't have permission to view this timeline");
+        }
+
+        Role userRole = permissionEvaluator.getRole(passportId, userId);
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Pageable pageable = PageRequest.of(filter.page(), filter.size(),
+            Sort.by(Sort.Direction.DESC, "entryDate", "createdAt"));
+
+        Page<TimelineEntry> entriesPage = timelineRepository.findByPassportId(passportId, pageable);
+
+        // Child view: only SUCCESS/MILESTONE/LIKE, exclude PENDING_REVIEW unless own
+        java.util.Set<EntryType> childTypes = java.util.Set.of(EntryType.SUCCESS, EntryType.MILESTONE, EntryType.LIKE);
+
+        List<TimelineEntryResponse> visibleEntries = entriesPage.getContent().stream()
+            .filter(entry -> childTypes.contains(entry.getEntryType()))
+            .filter(entry -> entry.getStatus() == ContentStatus.PUBLISHED
+                             || entry.getAuthor().getId().equals(userId))
+            .filter(entry -> filterByType(entry, filter.entryTypes()))
+            .filter(entry -> filterByTags(entry, filter.tags()))
+            .map(entry -> toResponse(entry, userRole))
+            .collect(Collectors.toList());
+
+        return new TimelinePageResponse(
+            visibleEntries,
+            entriesPage.getNumber(),
+            entriesPage.getTotalPages(),
+            entriesPage.getTotalElements(),
+            entriesPage.hasNext(),
+            entriesPage.hasPrevious()
+        );
+    }
+
+    /**
+     * Approve or reject a pending timeline entry contribution
+     */
+    @Transactional
+    public void reviewTimelineEntry(UUID passportId, UUID entryId, UUID userId,
+                                     boolean approve, String ipAddress) {
+        if (!permissionEvaluator.isOwnerOrCoOwner(passportId, userId)) {
+            throw new SecurityException("Only owners can review contributions");
+        }
+
+        TimelineEntry entry = timelineRepository.findById(entryId)
+            .orElseThrow(() -> new ResourceNotFoundException("Timeline entry not found"));
+
+        if (entry.getStatus() != ContentStatus.PENDING_REVIEW) {
+            throw new IllegalStateException("Entry is not pending review");
+        }
+
+        if (approve) {
+            entry.setStatus(ContentStatus.PUBLISHED);
+            timelineRepository.save(entry);
+        } else {
+            entry.setDeletedAt(java.time.Instant.now());
+            timelineRepository.save(entry);
+        }
     }
 
     /**
@@ -534,7 +614,9 @@ public class TimelineService {
             entry.isFlaggedForFollowup(),
             entry.getFollowupDueDate(),
             mentionedUserIds,
-            metadata
+            metadata,
+            entry.getStatus().name(),
+            entry.isChildModeContribution()
         );
     }
 

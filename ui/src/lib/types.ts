@@ -53,7 +53,11 @@ export type EntryType =
 export type VisibilityLevel = 'OWNERS_ONLY' | 'PROFESSIONALS' | 'ALL' | 'CUSTOM';
 
 // Role type - matches backend roles
-export type Role = 'OWNER' | 'CO_PARENT' | 'PROFESSIONAL' | 'VIEWER';
+export type Role = 'OWNER' | 'CO_PARENT' | 'PROFESSIONAL' | 'VIEWER' | 'CHILD';
+
+export type AccountType = 'STANDARD' | 'CHILD';
+
+export type ContentStatus = 'PUBLISHED' | 'PENDING_REVIEW';
 
 // Notification types
 export type NotificationType =

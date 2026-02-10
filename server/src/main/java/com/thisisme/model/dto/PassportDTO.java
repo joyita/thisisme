@@ -37,7 +37,9 @@ public class PassportDTO {
         Map<SectionType, List<SectionResponse>> sections,
         String userRole,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Boolean childViewShowHates,
+        UUID subjectUserId
     ) {}
 
     public record PassportSummaryResponse(
@@ -46,6 +48,7 @@ public class PassportDTO {
         LocalDate childDateOfBirth,
         String childAvatar,
         boolean wizardComplete,
+        Instant createdAt,
         Instant updatedAt
     ) {}
 
@@ -61,14 +64,17 @@ public class PassportDTO {
         String lastEditedByName,
         Integer revisionCount,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String status,
+        boolean childModeContribution
     ) {}
 
     public record CreateSectionRequest(
         @NotNull SectionType type,
         @NotBlank String content,
         String remedialSuggestion,
-        VisibilityLevel visibilityLevel
+        VisibilityLevel visibilityLevel,
+        Boolean childModeContribution
     ) {}
 
     public record UpdateSectionRequest(
@@ -76,7 +82,8 @@ public class PassportDTO {
         String remedialSuggestion,
         Boolean published,
         VisibilityLevel visibilityLevel,
-        Integer displayOrder
+        Integer displayOrder,
+        Boolean childModeContribution
     ) {}
 
     public record SectionRevisionResponse(

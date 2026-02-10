@@ -27,6 +27,13 @@ public class PermissionEvaluator {
     }
 
     /**
+     * Alias for isOwner — check if user is OWNER or CO_OWNER
+     */
+    public boolean isOwnerOrCoOwner(UUID passportId, UUID userId) {
+        return isOwner(passportId, userId);
+    }
+
+    /**
      * Check if user can view the passport
      */
     public boolean canView(UUID passportId, UUID userId) {

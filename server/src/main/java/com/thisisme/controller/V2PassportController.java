@@ -83,7 +83,9 @@ public class V2PassportController {
             section.getLastEditedBy() != null ? section.getLastEditedBy().getName() : section.getCreatedBy().getName(),
             0,  // revisionCount not needed for immediate responses
             section.getCreatedAt(),
-            section.getUpdatedAt()
+            section.getUpdatedAt(),
+            section.getStatus().name(),
+            section.isChildModeContribution()
         ));
     }
 

@@ -1,5 +1,5 @@
 // src/lib/api.ts
-import { SectionRevision, PassportRevision } from './types';
+import { SectionRevision, PassportRevision, AccountType, ContentStatus } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -92,7 +92,14 @@ async function apiRequest<T>(
       if (!retryResponse.ok) {
         throw new ApiError(retryResponse.status, await retryResponse.text());
       }
-      return retryResponse.json();
+      if (retryResponse.status === 204 || retryResponse.headers.get('content-length') === '0') {
+        return {} as T;
+      }
+      const retryText = await retryResponse.text();
+      if (!retryText) {
+        return {} as T;
+      }
+      return JSON.parse(retryText);
     }
   }
 
@@ -101,11 +108,15 @@ async function apiRequest<T>(
     throw new ApiError(response.status, error.message || 'Request failed');
   }
 
-  if (response.status === 204) {
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
     return {} as T;
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text) {
+    return {} as T;
+  }
+  return JSON.parse(text);
 }
 
 async function refreshTokens(refreshToken: string): Promise<AuthTokens | null> {
@@ -173,6 +184,8 @@ export const authApi = {
       userId: string;
       name: string;
       email: string;
+      accountType: AccountType;
+      passportId: string | null;
     }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
@@ -183,6 +196,13 @@ export const authApi = {
       expiresAt: data.expiresAt,
     });
     return data;
+  },
+
+  async verifyPassword(password: string) {
+    return apiRequest<{ valid: boolean }>('/api/auth/verify-password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
   },
 
   async logout() {
@@ -200,8 +220,9 @@ export const passportApi = {
     return apiRequest<PassportListItem[]>('/api/v1/passports');
   },
 
-  async get(id: string) {
-    return apiRequest<Passport>(`/api/v1/passports/${id}`);
+  async get(id: string, childView = false) {
+    const qs = childView ? '?childView=true' : '';
+    return apiRequest<Passport>(`/api/v1/passports/${id}${qs}`);
   },
 
   async create(childFirstName: string, childDateOfBirth?: string, consentGiven?: boolean) {
@@ -218,14 +239,14 @@ export const passportApi = {
     });
   },
 
-  async addSection(passportId: string, type: string, content: string, remedialSuggestion?: string, visibilityLevel?: string) {
+  async addSection(passportId: string, type: string, content: string, remedialSuggestion?: string, visibilityLevel?: string, childModeContribution?: boolean) {
     return apiRequest<PassportSection>(`/api/v1/passports/${passportId}/sections`, {
       method: 'POST',
-      body: JSON.stringify({ type, content, remedialSuggestion, visibilityLevel }),
+      body: JSON.stringify({ type, content, remedialSuggestion, visibilityLevel, childModeContribution }),
     });
   },
 
-  async updateSection(passportId: string, sectionId: string, updates: { content?: string; remedialSuggestion?: string; published?: boolean; displayOrder?: number }) {
+  async updateSection(passportId: string, sectionId: string, updates: { content?: string; remedialSuggestion?: string; published?: boolean; displayOrder?: number; childModeContribution?: boolean }) {
     return apiRequest<PassportSection>(`/api/v1/passports/${passportId}/sections/${sectionId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -273,6 +294,7 @@ export const timelineApi = {
     tags?: string[];
     pinnedOnly?: boolean;
     flaggedOnly?: boolean;
+    childView?: boolean;
   }) {
     const p = params || {};
     const qs = new URLSearchParams();
@@ -285,6 +307,7 @@ export const timelineApi = {
     if (p.tags?.length) p.tags.forEach(t => qs.append('tags', t));
     if (p.pinnedOnly) qs.set('pinnedOnly', 'true');
     if (p.flaggedOnly) qs.set('flaggedOnly', 'true');
+    if (p.childView) qs.set('childView', 'true');
     return apiRequest<TimelinePageResponse>(
       `/api/v1/passports/${passportId}/timeline?${qs.toString()}`
     );
@@ -592,8 +615,9 @@ export const exportApi = {
 export interface PassportListItem {
   id: string;
   childFirstName: string;
-  role: string;
-  createdAt: string;
+  role?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Passport {
@@ -609,6 +633,8 @@ export interface Passport {
   userRole?: string;
   createdAt: string;
   updatedAt: string;
+  childViewShowHates?: boolean;
+  subjectUserId?: string;
 }
 
 export interface PassportSection {
@@ -624,6 +650,8 @@ export interface PassportSection {
   revisionCount?: number;
   createdAt: string;
   updatedAt: string;
+  status?: ContentStatus;
+  childModeContribution?: boolean;
 }
 
 export type { SectionRevision, PassportRevision } from './types';
@@ -654,6 +682,8 @@ export interface TimelineEntry {
   followupDueDate?: string;
   mentionedUserIds: string[];
   metadata?: Record<string, unknown>;
+  status?: ContentStatus;
+  childModeContribution?: boolean;
 }
 
 export interface CreateTimelineEntry {
@@ -664,6 +694,7 @@ export interface CreateTimelineEntry {
   visibilityLevel?: string;
   tags?: string[];
   mentionedUserIds?: string[];
+  childModeContribution?: boolean;
 }
 
 export interface CreateCorrespondence {
@@ -754,8 +785,8 @@ export interface SharedPassport {
   documents: { fileName: string; mimeType: string; fileSize: number }[];
 }
 
-// Permission types for API
-export type Role = 'OWNER' | 'CO_PARENT' | 'PROFESSIONAL' | 'VIEWER';
+// Re-export Role from types for backwards compatibility
+export type { Role } from './types';
 
 // Matches backend PermissionResponse
 export interface PassportPermissionDetail {
@@ -872,6 +903,72 @@ export interface ReactionSummary {
   counts: Record<ReactionType, number>;
   userReactions: ReactionType[];
 }
+
+// Child Account API
+export const childAccountApi = {
+  async create(passportId: string, username: string, password: string) {
+    return apiRequest<{ userId: string; username: string; active: boolean; createdAt: string }>(
+      `/api/v1/passports/${passportId}/child-account`, {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      });
+  },
+
+  async get(passportId: string) {
+    return apiRequest<{ userId: string; username: string; active: boolean; createdAt: string }>(
+      `/api/v1/passports/${passportId}/child-account`);
+  },
+
+  async resetPassword(passportId: string, newPassword: string) {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/child-account/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ newPassword }),
+    });
+  },
+
+  async deactivate(passportId: string) {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/child-account/deactivate`, {
+      method: 'POST',
+    });
+  },
+
+  async delete(passportId: string) {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/child-account`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Review API
+export const reviewApi = {
+  async getPending(passportId: string) {
+    return apiRequest<{
+      sections: { id: string; sectionType: string; content: string; remedialSuggestion?: string; createdByName: string; createdAt: string }[];
+      timelineEntries: { id: string; entryType: string; title: string; content: string; createdByName: string; createdAt: string }[];
+    }>(`/api/v1/passports/${passportId}/pending-reviews`);
+  },
+
+  async reviewSection(passportId: string, sectionId: string, approve: boolean) {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/sections/${sectionId}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ approve }),
+    });
+  },
+
+  async reviewTimelineEntry(passportId: string, entryId: string, approve: boolean) {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/timeline/${entryId}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ approve }),
+    });
+  },
+
+  async updateChildViewSettings(passportId: string, showHates: boolean) {
+    return apiRequest<void>(`/api/v1/passports/${passportId}/child-view-settings`, {
+      method: 'PUT',
+      body: JSON.stringify({ showHates }),
+    });
+  },
+};
 
 // Collaboration API
 export const collaborationApi = {

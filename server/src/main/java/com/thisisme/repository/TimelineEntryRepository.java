@@ -1,6 +1,7 @@
 package com.thisisme.repository;
 
 import com.thisisme.model.entity.TimelineEntry;
+import com.thisisme.model.enums.ContentStatus;
 import com.thisisme.model.enums.EntryType;
 import com.thisisme.model.enums.VisibilityLevel;
 import org.springframework.data.domain.Page;
@@ -63,4 +64,11 @@ public interface TimelineEntryRepository extends JpaRepository<TimelineEntry, UU
                    "ORDER BY ts_rank(content_search_vector, to_tsquery('english', :query)) DESC",
            nativeQuery = true)
     List<TimelineEntry> searchByPassportId(@Param("passportId") UUID passportId, @Param("query") String query);
+
+    @Query("SELECT t FROM TimelineEntry t WHERE t.passport.id = :passportId " +
+           "AND t.status = :status AND t.deletedAt IS NULL " +
+           "ORDER BY t.createdAt DESC")
+    List<TimelineEntry> findByPassportIdAndStatus(
+        @Param("passportId") UUID passportId,
+        @Param("status") ContentStatus status);
 }

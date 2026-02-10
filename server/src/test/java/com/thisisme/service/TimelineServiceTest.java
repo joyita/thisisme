@@ -98,6 +98,7 @@ class TimelineServiceTest {
             null,
             Set.of("development", "motor-skills"),
             null,
+            null,
             null
         );
 
@@ -136,6 +137,7 @@ class TimelineServiceTest {
             "Test",
             "Content",
             LocalDate.now(),
+            null,
             null,
             null,
             null,

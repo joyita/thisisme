@@ -4,7 +4,8 @@ public enum Role {
     OWNER,          // Parent with full control
     CO_OWNER,       // Other parent with full control
     PROFESSIONAL,   // Healthcare/education professional with limited access
-    VIEWER;         // Read-only access (e.g., child view)
+    VIEWER,         // Read-only access (e.g., shared view)
+    CHILD;          // Child's own account with filtered, reviewed contributions
 
     /** Accepts both CO_PARENT (frontend) and CO_OWNER (DB). */
     public static Role fromString(String value) {

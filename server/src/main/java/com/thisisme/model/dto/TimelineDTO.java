@@ -24,7 +24,8 @@ public class TimelineDTO {
         Set<Role> visibleToRoles,
         Set<String> tags,
         Set<UUID> mentionedUserIds,
-        Map<String, Object> metadata
+        Map<String, Object> metadata,
+        Boolean childModeContribution
     ) {}
 
     public record UpdateTimelineEntryRequest(
@@ -63,7 +64,9 @@ public class TimelineDTO {
         boolean flaggedForFollowup,
         LocalDate followupDueDate,
         Set<UUID> mentionedUserIds,
-        Map<String, Object> metadata
+        Map<String, Object> metadata,
+        String status,
+        boolean childModeContribution
     ) {}
 
     public record AuthorInfo(

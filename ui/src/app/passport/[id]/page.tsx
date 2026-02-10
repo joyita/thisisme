@@ -5,6 +5,7 @@ import { useEffect, useState, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { useChildMode } from '@/context/ChildModeContext';
 import { usePassport } from '@/context/PassportContext';
 import { timelineApi, passportApi, TimelineEntry } from '@/lib/api';
 import { EntryType, SectionRevision, PassportRevision } from '@/lib/types';
@@ -25,6 +26,9 @@ import { EntryCollaboration } from '@/components/timeline/EntryCollaboration';
 import { PermissionsTab } from '@/components/permissions/PermissionsTab';
 import { ShareLinksTab } from '@/components/sharing/ShareLinksTab';
 import { DocumentsTab } from '@/components/documents/DocumentsTab';
+import { ChildViewPassport } from '@/components/child/ChildViewPassport';
+import { PendingReviewsPanel } from '@/components/child/PendingReviewsPanel';
+import { ChildAccountSetup } from '@/components/child/ChildAccountSetup';
 import {
   MdFace, MdArrowBack, MdLogout, MdPerson, MdAdd, MdEdit, MdDelete,
   MdFavorite, MdWarning, MdStar, MdHandshake, MdTimeline, MdShare,
@@ -81,7 +85,8 @@ function highlightText(text: string, query: string) {
 export default function PassportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
-  const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, logout, isChildAccount } = useAuth();
+  const { isChildMode, enterChildMode } = useChildMode();
   const {
     currentPassport, loadPassport, isLoading, error,
     addSection, updateSection, deleteSection,
@@ -441,6 +446,11 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
     return 'bg-blue-100 text-blue-800 border-blue-200';
   };
 
+  // If child mode or child account, render child view
+  if ((isChildMode || isChildAccount) && currentPassport) {
+    return <ChildViewPassport passport={currentPassport} />;
+  }
+
   return (
     <main className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -465,6 +475,15 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {isOwner && (
+              <button
+                onClick={enterChildMode}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 text-sm font-medium hover:bg-purple-100 transition-colors border border-purple-200"
+              >
+                <MdFace className="w-4 h-4" />
+                Child View
+              </button>
+            )}
             <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600">
               <MdPerson className="w-5 h-5" />
               <span>{user?.name}</span>
@@ -513,6 +532,9 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
             {error}
           </div>
         )}
+
+        {/* Pending Reviews Banner */}
+        {isOwner && <PendingReviewsPanel passportId={currentPassport.id} />}
 
         {/* --- Passport Tab --- */}
         {activeTab === 'passport' && (
@@ -1011,6 +1033,14 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
             <div className="border-t border-gray-200 pt-8">
               <ShareLinksTab passportId={currentPassport.id} childName={currentPassport.childFirstName} />
             </div>
+            {isOwner && (
+              <div className="border-t border-gray-200 pt-8">
+                <ChildAccountSetup
+                  passportId={currentPassport.id}
+                  childViewShowHates={currentPassport.childViewShowHates}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

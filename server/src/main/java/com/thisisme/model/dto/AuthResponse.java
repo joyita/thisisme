@@ -9,5 +9,7 @@ public record AuthResponse(
     Instant expiresAt,
     UUID userId,
     String name,
-    String email
+    String email,
+    String accountType,
+    UUID passportId
 ) {}

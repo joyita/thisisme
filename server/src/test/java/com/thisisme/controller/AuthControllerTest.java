@@ -69,7 +69,9 @@ class AuthControllerTest {
             Instant.now().plusSeconds(900),
             userId,
             "Test User",
-            "test@example.com"
+            "test@example.com",
+            "STANDARD",
+            null
         );
 
         when(authService.register(any(RegisterRequest.class), any(), any()))
@@ -96,7 +98,9 @@ class AuthControllerTest {
             Instant.now().plusSeconds(900),
             userId,
             "Test User",
-            "test@example.com"
+            "test@example.com",
+            "STANDARD",
+            null
         );
 
         when(authService.login(any(LoginRequest.class), any(), any()))
@@ -132,7 +136,9 @@ class AuthControllerTest {
             Instant.now().plusSeconds(900),
             userId,
             "Test User",
-            "test@example.com"
+            "test@example.com",
+            "STANDARD",
+            null
         );
 
         when(authService.refreshToken(any(), any())).thenReturn(response);

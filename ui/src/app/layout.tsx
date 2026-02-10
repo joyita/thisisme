@@ -5,6 +5,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { PassportProvider } from "@/context/PassportContext";
 import { NotificationProvider } from "@/context/NotificationContext";
+import { ChildModeProvider } from "@/context/ChildModeContext";
 import { Toaster } from "react-hot-toast";
 
 const rubik = Rubik({ variable: "--font-rubik", subsets: ["latin"], display: "swap" });
@@ -28,7 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <AuthProvider>
           <NotificationProvider>
-            <PassportProvider>{children}</PassportProvider>
+            <ChildModeProvider>
+              <PassportProvider>{children}</PassportProvider>
+            </ChildModeProvider>
           </NotificationProvider>
         </AuthProvider>
         <Toaster

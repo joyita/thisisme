@@ -27,4 +27,7 @@ public interface PassportRepository extends JpaRepository<Passport, UUID> {
     @Query("SELECT p FROM Passport p WHERE p.scheduledForDeletionAt IS NOT NULL " +
            "AND p.scheduledForDeletionAt <= :now")
     List<Passport> findScheduledForDeletion(@Param("now") Instant now);
+
+    @Query("SELECT p FROM Passport p WHERE p.subjectUser.id = :userId AND p.active = true")
+    Optional<Passport> findBySubjectUserId(@Param("userId") UUID userId);
 }

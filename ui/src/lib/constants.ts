@@ -300,8 +300,14 @@ export const ROLE_CONFIG = {
     description: 'Read-only access to permitted content',
     color: 'gray',
   },
+  CHILD: {
+    label: 'Child',
+    description: 'Filtered view with reviewed contributions',
+    color: 'pink',
+  },
 } as const;
 
-
+export const CHILD_VISIBLE_SECTIONS = ['LOVES', 'STRENGTHS'] as const;
+export const CHILD_ALLOWED_TIMELINE_TYPES = ['SUCCESS', 'MILESTONE', 'LIKE'] as const;
 
 

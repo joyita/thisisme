@@ -1,5 +1,6 @@
 package com.thisisme.model.entity;
 
+import com.thisisme.model.enums.ContentStatus;
 import com.thisisme.model.enums.EntryType;
 import com.thisisme.model.enums.Role;
 import com.thisisme.model.enums.VisibilityLevel;
@@ -101,6 +102,13 @@ public class TimelineEntry {
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata = new HashMap<>();
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ContentStatus status = ContentStatus.PUBLISHED;
+
+    @Column(nullable = false)
+    private boolean childModeContribution = false;
+
     @Column(nullable = false)
     private boolean pinned = false;
 
@@ -190,6 +198,12 @@ public class TimelineEntry {
 
     public Instant getDeletedAt() { return deletedAt; }
     public void setDeletedAt(Instant deletedAt) { this.deletedAt = deletedAt; }
+
+    public ContentStatus getStatus() { return status; }
+    public void setStatus(ContentStatus status) { this.status = status; }
+
+    public boolean isChildModeContribution() { return childModeContribution; }
+    public void setChildModeContribution(boolean childModeContribution) { this.childModeContribution = childModeContribution; }
 
     public boolean isDeleted() { return deletedAt != null; }
 

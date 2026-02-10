@@ -41,6 +41,13 @@ public class Passport {
     @JoinColumn(name = "created_by_id", nullable = false)
     private User createdBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "subject_user_id")
+    private User subjectUser;
+
+    @Column(nullable = false)
+    private boolean childViewShowHates = false;
+
     @OneToMany(mappedBy = "passport", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("type ASC, displayOrder ASC, createdAt ASC")
     private List<PassportSection> sections = new ArrayList<>();
@@ -103,6 +110,12 @@ public class Passport {
     public void setChildAvatar(String childAvatar) { this.childAvatar = childAvatar; }
 
     public User getCreatedBy() { return createdBy; }
+
+    public User getSubjectUser() { return subjectUser; }
+    public void setSubjectUser(User subjectUser) { this.subjectUser = subjectUser; }
+
+    public boolean isChildViewShowHates() { return childViewShowHates; }
+    public void setChildViewShowHates(boolean childViewShowHates) { this.childViewShowHates = childViewShowHates; }
 
     public List<PassportSection> getSections() { return sections; }
     public void addSection(PassportSection section) {

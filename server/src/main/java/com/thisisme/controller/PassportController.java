@@ -2,6 +2,7 @@ package com.thisisme.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.thisisme.model.dto.ChildAccountDTO;
 import com.thisisme.model.dto.PassportDTO.*;
 import com.thisisme.model.entity.Passport;
 import com.thisisme.model.entity.PassportRevision;
@@ -67,7 +68,12 @@ public class PassportController {
     public ResponseEntity<PassportResponse> getPassport(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable UUID id,
+            @RequestParam(defaultValue = "false") boolean childView,
             HttpServletRequest httpRequest) {
+        if (childView) {
+            PassportResponse response = passportService.getPassportForChildView(id, principal.id());
+            return ResponseEntity.ok(response);
+        }
         PassportResponse response = passportService.getPassportForRole(
             id, principal.id(), getClientIp(httpRequest));
         return ResponseEntity.ok(response);
@@ -253,6 +259,36 @@ public class PassportController {
         return ResponseEntity.noContent().build();
     }
 
+    // Child view endpoints
+
+    @GetMapping("/{id}/pending-reviews")
+    public ResponseEntity<ChildAccountDTO.PendingReviewsResponse> getPendingReviews(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(passportService.getPendingReviews(id, principal.id()));
+    }
+
+    @PostMapping("/{passportId}/sections/{sectionId}/review")
+    public ResponseEntity<Void> reviewSection(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID passportId,
+            @PathVariable UUID sectionId,
+            @Valid @RequestBody ChildAccountDTO.ReviewContributionRequest request,
+            HttpServletRequest httpRequest) {
+        passportService.reviewSection(passportId, sectionId, principal.id(),
+            request.approve(), getClientIp(httpRequest));
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/{id}/child-view-settings")
+    public ResponseEntity<Void> updateChildViewSettings(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id,
+            @Valid @RequestBody ChildAccountDTO.ChildViewSettingsRequest request) {
+        passportService.updateChildViewSettings(id, principal.id(), request.showHates());
+        return ResponseEntity.ok().build();
+    }
+
     // Helper methods
     private PassportResponse toResponse(Passport passport) {
         Map<SectionType, List<SectionResponse>> sections = passport.getSections().stream()
@@ -270,7 +306,9 @@ public class PassportController {
             sections,
             "OWNER",  // Only owners can create passports
             passport.getCreatedAt(),
-            passport.getUpdatedAt()
+            passport.getUpdatedAt(),
+            passport.isChildViewShowHates(),
+            passport.getSubjectUser() != null ? passport.getSubjectUser().getId() : null
         );
     }
 
@@ -281,6 +319,7 @@ public class PassportController {
             passport.getChildDateOfBirth(),
             passport.getChildAvatar(),
             passport.isWizardComplete(),
+            passport.getCreatedAt(),
             passport.getUpdatedAt()
         );
     }
@@ -298,7 +337,9 @@ public class PassportController {
             section.getLastEditedBy() != null ? section.getLastEditedBy().getName() : section.getCreatedBy().getName(),
             0,  // revisionCount not needed for immediate responses, will be populated on full passport fetch
             section.getCreatedAt(),
-            section.getUpdatedAt()
+            section.getUpdatedAt(),
+            section.getStatus().name(),
+            section.isChildModeContribution()
         );
     }
 

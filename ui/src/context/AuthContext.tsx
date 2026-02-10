@@ -3,17 +3,21 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { authApi, getTokens, clearTokens } from '@/lib/api';
+import type { AccountType } from '@/lib/types';
 
 interface User {
   id: string;
   name: string;
   email: string;
+  accountType?: AccountType;
+  passportId?: string | null;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isChildAccount: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string, consentGiven: boolean) => Promise<void>;
   logout: () => Promise<void>;
@@ -53,7 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const response = await authApi.login(email, password);
-      const newUser = { id: response.userId, name: response.name, email: response.email };
+      const newUser: User = {
+        id: response.userId,
+        name: response.name,
+        email: response.email,
+        accountType: response.accountType,
+        passportId: response.passportId,
+      };
       setUser(newUser);
       if (typeof window !== 'undefined') {
         localStorage.setItem('user_info', JSON.stringify(newUser));
@@ -108,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         isAuthenticated: !!user,
+        isChildAccount: user?.accountType === 'CHILD',
         login,
         register,
         logout,

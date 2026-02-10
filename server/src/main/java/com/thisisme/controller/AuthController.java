@@ -81,6 +81,14 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("email", email));
     }
 
+    @PostMapping("/verify-password")
+    public ResponseEntity<Map<String, Boolean>> verifyPassword(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody com.thisisme.model.dto.ChildAccountDTO.VerifyPasswordRequest request) {
+        boolean valid = authService.verifyPassword(principal.id(), request.password());
+        return ResponseEntity.ok(Map.of("valid", valid));
+    }
+
     private String getClientIp(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {

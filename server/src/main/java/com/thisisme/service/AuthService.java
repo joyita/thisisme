@@ -3,8 +3,11 @@ package com.thisisme.service;
 import com.thisisme.model.dto.AuthResponse;
 import com.thisisme.model.dto.LoginRequest;
 import com.thisisme.model.dto.RegisterRequest;
+import com.thisisme.model.entity.Passport;
 import com.thisisme.model.entity.User;
+import com.thisisme.model.enums.AccountType;
 import com.thisisme.model.enums.AuditAction;
+import com.thisisme.repository.PassportRepository;
 import com.thisisme.repository.UserRepository;
 import com.thisisme.security.JwtTokenProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,17 +21,20 @@ import java.util.UUID;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final PassportRepository passportRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final AuditService auditService;
     private final InvitationService invitationService;
 
     public AuthService(UserRepository userRepository,
+                      PassportRepository passportRepository,
                       PasswordEncoder passwordEncoder,
                       JwtTokenProvider tokenProvider,
                       AuditService auditService,
                       InvitationService invitationService) {
         this.userRepository = userRepository;
+        this.passportRepository = passportRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.auditService = auditService;
@@ -64,8 +70,15 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request, String ipAddress, String userAgent) {
-        User user = userRepository.findByEmailAndActiveTrue(request.email().toLowerCase())
-            .orElse(null);
+        String identifier = request.email().trim().toLowerCase();
+
+        // Try direct email lookup first, then synthetic child email
+        User user = userRepository.findByEmailAndActiveTrue(identifier).orElse(null);
+        if (user == null) {
+            // Try child account login: username → synthetic email
+            String syntheticEmail = identifier + "@child.thisisme.local";
+            user = userRepository.findByEmailAndActiveTrue(syntheticEmail).orElse(null);
+        }
 
         if (user == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             auditService.logSystem(AuditAction.LOGIN_FAILED, ipAddress)
@@ -111,13 +124,28 @@ public class AuthService {
                 .withDescription("User logged out")
                 .save();
         });
-        // In a production system, you would also invalidate the refresh token
-        // by storing it in a blacklist or using a token version in the user record
+    }
+
+    /**
+     * Verify a user's password (used for exiting child mode).
+     */
+    public boolean verifyPassword(UUID userId, String password) {
+        return userRepository.findById(userId)
+            .map(user -> passwordEncoder.matches(password, user.getPasswordHash()))
+            .orElse(false);
     }
 
     private AuthResponse createAuthResponse(User user) {
         String accessToken = tokenProvider.createAccessToken(user.getId(), user.getEmail());
         String refreshToken = tokenProvider.createRefreshToken(user.getId());
+
+        // For child accounts, look up linked passport
+        UUID passportId = null;
+        if (user.getAccountType() == AccountType.CHILD) {
+            passportId = passportRepository.findBySubjectUserId(user.getId())
+                .map(Passport::getId)
+                .orElse(null);
+        }
 
         return new AuthResponse(
             accessToken,
@@ -125,7 +153,9 @@ public class AuthService {
             tokenProvider.getExpiration(accessToken),
             user.getId(),
             user.getName(),
-            user.getEmail()
+            user.getEmail(),
+            user.getAccountType().name(),
+            passportId
         );
     }
 }

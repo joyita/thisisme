@@ -3,6 +3,7 @@ package com.thisisme.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thisisme.exception.ResourceNotFoundException;
+import com.thisisme.model.dto.ChildAccountDTO;
 import com.thisisme.model.dto.PassportDTO.*;
 import com.thisisme.model.entity.*;
 import com.thisisme.model.entity.SectionRevision.ChangeType;
@@ -32,6 +33,7 @@ public class PassportService {
     private final SectionRevisionRepository sectionRevisionRepository;
     private final InvitationService invitationService;
     private final CustomRoleService customRoleService;
+    private final TimelineEntryRepository timelineEntryRepository;
 
     public PassportService(
             PassportRepository passportRepository,
@@ -44,7 +46,8 @@ public class PassportService {
             NotificationService notificationService,
             SectionRevisionRepository sectionRevisionRepository,
             InvitationService invitationService,
-            CustomRoleService customRoleService) {
+            CustomRoleService customRoleService,
+            TimelineEntryRepository timelineEntryRepository) {
         this.passportRepository = passportRepository;
         this.permissionRepository = permissionRepository;
         this.userRepository = userRepository;
@@ -56,6 +59,7 @@ public class PassportService {
         this.sectionRevisionRepository = sectionRevisionRepository;
         this.invitationService = invitationService;
         this.customRoleService = customRoleService;
+        this.timelineEntryRepository = timelineEntryRepository;
     }
 
     @Transactional
@@ -170,7 +174,9 @@ public class PassportService {
             filteredSections,
             userRole.toApiName(),
             saved.getCreatedAt(),
-            saved.getUpdatedAt()
+            saved.getUpdatedAt(),
+            saved.isChildViewShowHates(),
+            saved.getSubjectUser() != null ? saved.getSubjectUser().getId() : null
         );
     }
 
@@ -199,6 +205,16 @@ public class PassportService {
         }
         if (request.visibilityLevel() != null) {
             section.setVisibilityLevel(request.visibilityLevel());
+        }
+
+        // Child role or child-mode contributions require review
+        Role userRole = permissionEvaluator.getRole(passportId, userId);
+        logger.info("addSection: userRole={}, childModeContribution={}, sectionId={}",
+            userRole, request.childModeContribution(), section.getId());
+        if (userRole == Role.CHILD || Boolean.TRUE.equals(request.childModeContribution())) {
+            section.setStatus(ContentStatus.PENDING_REVIEW);
+            section.setChildModeContribution(true);
+            logger.info("addSection: set status=PENDING_REVIEW for section type={}", request.type());
         }
 
         long sameTypeCount = passport.getSections().stream()
@@ -266,6 +282,16 @@ public class PassportService {
                 request.published() ? ChangeType.PUBLISH : ChangeType.UNPUBLISH,
                 user
             ));
+        }
+
+        // Child role or child-mode edits require review
+        Role userRole = permissionEvaluator.getRole(passportId, userId);
+        logger.info("updateSection: sectionId={}, currentStatus={}, userRole={}, childModeContribution={}",
+            sectionId, section.getStatus(), userRole, request.childModeContribution());
+        if (userRole == Role.CHILD || Boolean.TRUE.equals(request.childModeContribution())) {
+            section.setStatus(ContentStatus.PENDING_REVIEW);
+            section.setChildModeContribution(true);
+            logger.info("updateSection: set status=PENDING_REVIEW for sectionId={}", sectionId);
         }
 
         if (request.content() != null) {
@@ -658,7 +684,9 @@ public class PassportService {
             filteredSections,
             userRole.toApiName(),
             passport.getCreatedAt(),
-            passport.getUpdatedAt()
+            passport.getUpdatedAt(),
+            passport.isChildViewShowHates(),
+            passport.getSubjectUser() != null ? passport.getSubjectUser().getId() : null
         );
     }
 
@@ -798,7 +826,126 @@ public class PassportService {
             section.getLastEditedBy() != null ? section.getLastEditedBy().getName() : section.getCreatedBy().getName(),
             revisionCount,
             section.getCreatedAt(),
-            section.getUpdatedAt()
+            section.getUpdatedAt(),
+            section.getStatus().name(),
+            section.isChildModeContribution()
         );
+    }
+
+    // ── Child View Methods ──
+
+    @Transactional(readOnly = true)
+    public PassportResponse getPassportForChildView(UUID passportId, UUID userId) {
+        Passport passport = passportRepository.findActiveById(passportId)
+            .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
+
+        if (!permissionEvaluator.canView(passportId, userId)) {
+            throw new SecurityException("Access denied");
+        }
+
+        // Filter to LOVES, STRENGTHS, and conditionally HATES
+        java.util.Set<SectionType> allowedTypes = new java.util.HashSet<>();
+        allowedTypes.add(SectionType.LOVES);
+        allowedTypes.add(SectionType.STRENGTHS);
+        if (passport.isChildViewShowHates()) {
+            allowedTypes.add(SectionType.HATES);
+        }
+
+        Map<SectionType, List<SectionResponse>> filteredSections = passport.getSections().stream()
+            .filter(s -> allowedTypes.contains(s.getType()))
+            .filter(s -> s.getStatus() == com.thisisme.model.enums.ContentStatus.PUBLISHED
+                         || s.getCreatedBy().getId().equals(userId))
+            .map(this::toSectionResponse)
+            .collect(Collectors.groupingBy(SectionResponse::type));
+
+        Role userRole = permissionEvaluator.getRole(passportId, userId);
+
+        return new PassportResponse(
+            passport.getId(),
+            passport.getChildFirstName(),
+            passport.getChildDateOfBirth(),
+            passport.getChildAvatar(),
+            passport.getCreatedBy().getId(),
+            passport.getCreatedBy().getName(),
+            passport.isWizardComplete(),
+            filteredSections,
+            userRole != null ? userRole.toApiName() : "VIEWER",
+            passport.getCreatedAt(),
+            passport.getUpdatedAt(),
+            passport.isChildViewShowHates(),
+            passport.getSubjectUser() != null ? passport.getSubjectUser().getId() : null
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public ChildAccountDTO.PendingReviewsResponse getPendingReviews(UUID passportId, UUID userId) {
+        Passport passport = passportRepository.findActiveById(passportId)
+            .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
+
+        if (!permissionEvaluator.isOwnerOrCoOwner(passportId, userId)) {
+            throw new SecurityException("Only owners can view pending reviews");
+        }
+
+        logger.info("getPendingReviews: passportId={}, totalSections={}, statuses={}",
+            passportId, passport.getSections().size(),
+            passport.getSections().stream().map(s -> s.getId() + ":" + s.getStatus()).toList());
+        List<ChildAccountDTO.PendingSection> pendingSections = passport.getSections().stream()
+            .filter(s -> s.getStatus() == com.thisisme.model.enums.ContentStatus.PENDING_REVIEW)
+            .map(s -> new ChildAccountDTO.PendingSection(
+                s.getId(), s.getType().name(), s.getContent(), s.getRemedialSuggestion(),
+                s.getCreatedBy().getName(), s.getCreatedAt()))
+            .toList();
+
+        List<ChildAccountDTO.PendingTimelineEntry> pendingEntries = timelineEntryRepository
+            .findByPassportIdAndStatus(passportId, com.thisisme.model.enums.ContentStatus.PENDING_REVIEW).stream()
+            .map(e -> new ChildAccountDTO.PendingTimelineEntry(
+                e.getId(), e.getEntryType().name(), e.getTitle(), e.getContent(),
+                e.getAuthor().getName(), e.getCreatedAt()))
+            .toList();
+
+        return new ChildAccountDTO.PendingReviewsResponse(pendingSections, pendingEntries);
+    }
+
+    @Transactional
+    public void reviewSection(UUID passportId, UUID sectionId, UUID userId, boolean approve, String ipAddress) {
+        Passport passport = passportRepository.findActiveById(passportId)
+            .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
+
+        if (!permissionEvaluator.isOwnerOrCoOwner(passportId, userId)) {
+            throw new SecurityException("Only owners can review contributions");
+        }
+
+        PassportSection section = passport.getSections().stream()
+            .filter(s -> s.getId().equals(sectionId))
+            .findFirst()
+            .orElseThrow(() -> new ResourceNotFoundException("Section", sectionId));
+
+        logger.info("reviewSection: sectionId={}, status={}, childModeContribution={}, approve={}",
+            sectionId, section.getStatus(), section.isChildModeContribution(), approve);
+        if (section.getStatus() != com.thisisme.model.enums.ContentStatus.PENDING_REVIEW) {
+            logger.warn("reviewSection: REJECTING - section {} has status {} (expected PENDING_REVIEW)",
+                sectionId, section.getStatus());
+            throw new IllegalStateException("Section is not pending review");
+        }
+
+        if (approve) {
+            section.setStatus(com.thisisme.model.enums.ContentStatus.PUBLISHED);
+        } else {
+            passport.getSections().remove(section);
+        }
+        passportRepository.save(passport);
+    }
+
+    @Transactional
+    public void updateChildViewSettings(UUID passportId, UUID userId, boolean showHates) {
+        Passport passport = passportRepository.findActiveById(passportId)
+            .orElseThrow(() -> new ResourceNotFoundException("Passport", passportId));
+
+        if (!permissionEvaluator.isOwnerOrCoOwner(passportId, userId)) {
+            throw new SecurityException("Only owners can update child view settings");
+        }
+
+        passport.setChildViewShowHates(showHates);
+        passportRepository.save(passport);
     }
 }

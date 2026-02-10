@@ -53,8 +53,14 @@ public class TimelineController {
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "false") boolean childView,
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest httpRequest) {
+
+        if (childView) {
+            // Override types to only child-allowed types
+            types = Set.of(EntryType.SUCCESS, EntryType.MILESTONE, EntryType.LIKE);
+        }
 
         TimelineFilterRequest filter = new TimelineFilterRequest(
             types,
@@ -72,7 +78,8 @@ public class TimelineController {
             passportId,
             principal.id(),
             filter,
-            getClientIp(httpRequest)
+            getClientIp(httpRequest),
+            childView
         );
 
         return ResponseEntity.ok(response);
@@ -190,6 +197,19 @@ public class TimelineController {
         );
 
         return ResponseEntity.ok(collaborators);
+    }
+
+    @PostMapping("/{entryId}/review")
+    public ResponseEntity<Void> reviewTimelineEntry(
+            @PathVariable UUID passportId,
+            @PathVariable UUID entryId,
+            @RequestBody com.thisisme.model.dto.ChildAccountDTO.ReviewContributionRequest request,
+            @AuthenticationPrincipal UserPrincipal principal,
+            HttpServletRequest httpRequest) {
+
+        timelineService.reviewTimelineEntry(
+            passportId, entryId, principal.id(), request.approve(), getClientIp(httpRequest));
+        return ResponseEntity.ok().build();
     }
 
     private String getClientIp(HttpServletRequest request) {
