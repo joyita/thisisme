@@ -260,7 +260,40 @@ public class DocumentService {
             .withEntity("Document", documentId)
             .withDescription("Downloaded document: " + document.getOriginalFileName());
 
+        // For local storage, return API endpoint URL instead of relative path
+        if (storageService instanceof LocalStorageService) {
+            return "/api/v1/passports/" + passportId + "/documents/" + documentId + "/file";
+        }
+
         return storageService.getDownloadUrl(document.getStoragePath(), document.getOriginalFileName());
+    }
+
+    /**
+     * Download file bytes with proper headers
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.http.ResponseEntity<byte[]> downloadFile(UUID documentId, UUID userId, String ipAddress) throws IOException {
+        Document document = getDocument(documentId, userId, ipAddress);
+
+        UUID passportId = document.getPassport().getId();
+        if (!permissionEvaluator.canDownloadDocuments(passportId, userId)) {
+            throw new SecurityException("You don't have permission to download documents");
+        }
+
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        auditService.log(AuditAction.DOCUMENT_DOWNLOADED, userId, user.getName(), ipAddress)
+            .withPassport(document.getPassport())
+            .withEntity("Document", documentId)
+            .withDescription("Downloaded document: " + document.getOriginalFileName());
+
+        byte[] fileBytes = storageService.download(document.getStoragePath());
+
+        return org.springframework.http.ResponseEntity.ok()
+            .header("Content-Disposition", "attachment; filename=\"" + document.getOriginalFileName() + "\"")
+            .header("Content-Type", document.getMimeType())
+            .body(fileBytes);
     }
 
     /**
@@ -308,6 +341,71 @@ public class DocumentService {
         }
 
         return documentRepository.findByTimelineEntryId(entryId);
+    }
+
+    /**
+     * Save email attachment from webhook (bypasses normal file validation)
+     */
+    @Transactional
+    public Document saveEmailAttachment(
+            UUID passportId,
+            UUID userId,
+            UUID timelineEntryId,
+            String filename,
+            String contentType,
+            byte[] fileBytes) throws IOException {
+
+        Passport passport = passportRepository.findActiveById(passportId)
+            .orElseThrow(() -> new ResourceNotFoundException("Passport not found"));
+
+        User uploader = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        TimelineEntry timelineEntry = timelineRepository.findById(timelineEntryId)
+            .orElseThrow(() -> new ResourceNotFoundException("Timeline entry not found"));
+
+        // Sanitize filename to prevent path traversal
+        String sanitizedFilename = sanitizeFilename(filename);
+        logger.info("Sanitized filename '{}' to '{}'", filename, sanitizedFilename);
+
+        // Generate storage path
+        String storagePath = generateStoragePath(passportId, sanitizedFilename);
+        logger.info("Generated storage path: {}", storagePath);
+
+        // Calculate content hash
+        String contentHash = calculateHash(fileBytes);
+
+        // Upload to storage
+        storageService.upload(storagePath, fileBytes, contentType);
+
+        // Create document record
+        Document document = new Document(
+            passport,
+            storagePath.substring(storagePath.lastIndexOf('/') + 1),
+            sanitizedFilename,
+            contentType,
+            (long) fileBytes.length,
+            storagePath,
+            encryptionKeyId,
+            contentHash,
+            uploader
+        );
+
+        // Link to timeline entry
+        timelineEntry.addAttachment(document);
+
+        Document saved = documentRepository.save(document);
+        timelineRepository.save(timelineEntry);
+
+        auditService.log(AuditAction.DOCUMENT_UPLOADED, userId, uploader.getName(), "webhook")
+            .withPassport(passport)
+            .withEntity("Document", saved.getId())
+            .withDescription("Email attachment uploaded: " + sanitizedFilename)
+            .withDataCategories("CORRESPONDENCE");
+
+        logger.info("Email attachment saved: {} for passport {}", saved.getId(), passportId);
+
+        return saved;
     }
 
     // Helper methods
@@ -372,6 +470,36 @@ public class DocumentService {
 
     private boolean isImageFile(String mimeType) {
         return mimeType != null && mimeType.startsWith("image/");
+    }
+
+    /**
+     * Sanitize filename to prevent path traversal and other security issues
+     */
+    private String sanitizeFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return "attachment";
+        }
+
+        // Remove any path separators and normalize
+        String sanitized = filename.replaceAll("[/\\\\]", "_");
+
+        // Remove any leading dots to prevent hidden files
+        sanitized = sanitized.replaceAll("^\\.+", "");
+
+        // Remove any null bytes
+        sanitized = sanitized.replace("\0", "");
+
+        // If filename is now empty, use default
+        if (sanitized.isBlank()) {
+            return "attachment";
+        }
+
+        // Limit length
+        if (sanitized.length() > 255) {
+            sanitized = sanitized.substring(0, 255);
+        }
+
+        return sanitized;
     }
 
     /**

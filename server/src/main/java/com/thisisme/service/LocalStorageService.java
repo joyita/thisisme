@@ -31,7 +31,7 @@ public class LocalStorageService implements StorageService {
 
     @PostConstruct
     public void init() throws IOException {
-        basePath = Paths.get(storagePath).toAbsolutePath();
+        basePath = Paths.get(storagePath).toAbsolutePath().normalize();
         Files.createDirectories(basePath);
         logger.info("Local storage initialized at: {}", basePath);
     }
@@ -83,7 +83,10 @@ public class LocalStorageService implements StorageService {
      */
     private Path resolveAndValidatePath(String key) throws IOException {
         Path resolved = basePath.resolve(key).normalize();
+        logger.info("Path validation - basePath: {}, key: {}, resolved: {}, startsWith: {}",
+            basePath, key, resolved, resolved.startsWith(basePath));
         if (!resolved.startsWith(basePath)) {
+            logger.error("Path traversal detected! basePath='{}', resolved='{}'", basePath, resolved);
             throw new IOException("Invalid path: path traversal attempt detected");
         }
         return resolved;

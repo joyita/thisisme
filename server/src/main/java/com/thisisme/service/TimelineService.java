@@ -101,6 +101,10 @@ public class TimelineService {
             entry.setMentionedUserIds(new HashSet<>(request.mentionedUserIds()));
         }
 
+        if (request.metadata() != null) {
+            entry.setMetadata(request.metadata());
+        }
+
         TimelineEntry saved = timelineRepository.save(entry);
 
         auditService.log(AuditAction.TIMELINE_ENTRY_CREATED, userId, author.getName(), ipAddress)
@@ -253,6 +257,10 @@ public class TimelineService {
             entry.setMentionedUserIds(new HashSet<>(request.mentionedUserIds()));
         }
 
+        if (request.metadata() != null) {
+            entry.setMetadata(request.metadata());
+        }
+
         TimelineEntry saved = timelineRepository.save(entry);
 
         // Notify newly mentioned users (those not previously mentioned)
@@ -362,6 +370,79 @@ public class TimelineService {
     }
 
     /**
+     * Create a correspondence (email) timeline entry with metadata
+     */
+    @Transactional
+    public TimelineEntryResponse createCorrespondenceEntry(
+            UUID passportId,
+            UUID userId,
+            String from,
+            String to,
+            String subject,
+            String body,
+            LocalDate date,
+            String source,
+            VisibilityLevel visibilityLevel,
+            Set<Role> visibleToRoles,
+            Set<String> tags,
+            String ipAddress) {
+
+        Passport passport = passportRepository.findActiveById(passportId)
+            .orElseThrow(() -> new ResourceNotFoundException("Passport not found"));
+
+        if (!permissionEvaluator.canAddTimelineEntries(passportId, userId)) {
+            throw new SecurityException("You don't have permission to add timeline entries");
+        }
+
+        User author = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        TimelineEntry entry = new TimelineEntry(
+            passport,
+            author,
+            EntryType.CORRESPONDENCE,
+            subject,
+            body,
+            date
+        );
+
+        // Set metadata for email
+        var metadata = new java.util.HashMap<String, Object>();
+        metadata.put("from", from);
+        if (to != null) {
+            metadata.put("to", to);
+        }
+        metadata.put("subject", subject);
+        metadata.put("date", date.toString());
+        metadata.put("source", source);
+        entry.setMetadata(metadata);
+
+        if (visibilityLevel != null) {
+            entry.setVisibilityLevel(visibilityLevel);
+        } else {
+            entry.setVisibilityLevel(VisibilityLevel.OWNERS_ONLY);
+        }
+
+        if (visibleToRoles != null) {
+            entry.setVisibleToRoles(visibleToRoles);
+        }
+
+        if (tags != null) {
+            tags.forEach(entry::addTag);
+        }
+
+        TimelineEntry saved = timelineRepository.save(entry);
+
+        auditService.log(AuditAction.TIMELINE_ENTRY_CREATED, userId, author.getName(), ipAddress)
+            .withPassport(passport)
+            .withEntity("TimelineEntry", saved.getId())
+            .withDescription("Created correspondence entry: " + subject)
+            .withDataCategories("CORRESPONDENCE");
+
+        return toResponse(saved, permissionEvaluator.getRole(passportId, userId));
+    }
+
+    /**
      * Get collaborators for a passport (used for @mention autocomplete)
      */
     @Transactional(readOnly = true)
@@ -427,6 +508,7 @@ public class TimelineService {
         Set<String> tags = entry.getTags() != null ? new java.util.HashSet<>(entry.getTags()) : Set.of();
         Set<UUID> mentionedUserIds = entry.getMentionedUserIds() != null ? new java.util.HashSet<>(entry.getMentionedUserIds()) : Set.of();
         int attachmentCount = entry.getAttachments() != null ? entry.getAttachments().size() : 0;
+        var metadata = entry.getMetadata() != null ? new java.util.HashMap<>(entry.getMetadata()) : null;
 
         return new TimelineEntryResponse(
             entry.getId(),
@@ -451,7 +533,8 @@ public class TimelineService {
             entry.getUpdatedAt(),
             entry.isFlaggedForFollowup(),
             entry.getFollowupDueDate(),
-            mentionedUserIds
+            mentionedUserIds,
+            metadata
         );
     }
 

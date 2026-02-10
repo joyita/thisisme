@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -22,7 +23,8 @@ public class TimelineDTO {
         VisibilityLevel visibilityLevel,
         Set<Role> visibleToRoles,
         Set<String> tags,
-        Set<UUID> mentionedUserIds
+        Set<UUID> mentionedUserIds,
+        Map<String, Object> metadata
     ) {}
 
     public record UpdateTimelineEntryRequest(
@@ -34,7 +36,8 @@ public class TimelineDTO {
         Set<Role> visibleToRoles,
         Set<String> tags,
         Boolean pinned,
-        Set<UUID> mentionedUserIds
+        Set<UUID> mentionedUserIds,
+        Map<String, Object> metadata
     ) {}
 
     public record FlagEntryRequest(
@@ -59,7 +62,8 @@ public class TimelineDTO {
         Instant updatedAt,
         boolean flaggedForFollowup,
         LocalDate followupDueDate,
-        Set<UUID> mentionedUserIds
+        Set<UUID> mentionedUserIds,
+        Map<String, Object> metadata
     ) {}
 
     public record AuthorInfo(

@@ -38,6 +38,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/health").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
 
+                // Webhook endpoints (authenticate via webhook secret)
+                .requestMatchers(HttpMethod.POST, "/api/v2/passports/*/correspondence/inbound").permitAll()
+
                 // Privacy notices (public)
                 .requestMatchers(HttpMethod.GET, "/api/privacy-notice/**").permitAll()
 

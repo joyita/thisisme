@@ -5,6 +5,8 @@ import com.thisisme.model.enums.Role;
 import com.thisisme.model.enums.VisibilityLevel;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -12,8 +14,10 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -89,6 +93,14 @@ public class TimelineEntry {
     @Column(name = "user_id")
     private Set<UUID> mentionedUserIds = new HashSet<>();
 
+    /**
+     * JSONB metadata for entry types like CORRESPONDENCE.
+     * Stores email headers: from, to, date, subject, source (WEBHOOK|MANUAL)
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Object> metadata = new HashMap<>();
+
     @Column(nullable = false)
     private boolean pinned = false;
 
@@ -160,6 +172,9 @@ public class TimelineEntry {
 
     public Set<UUID> getMentionedUserIds() { return mentionedUserIds; }
     public void setMentionedUserIds(Set<UUID> mentionedUserIds) { this.mentionedUserIds = mentionedUserIds; }
+
+    public Map<String, Object> getMetadata() { return metadata; }
+    public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
 
     public boolean isPinned() { return pinned; }
     public void setPinned(boolean pinned) { this.pinned = pinned; }

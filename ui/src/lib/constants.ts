@@ -144,6 +144,16 @@ export const ENTRY_TYPE_CONFIG = {
     badgeBg: 'bg-indigo-100',
     badgeText: 'text-indigo-700',
   },
+  CORRESPONDENCE: {
+    label: 'Email',
+    description: 'Email correspondence with professionals',
+    color: 'slate',
+    bgColor: 'bg-slate-50',
+    textColor: 'text-slate-700',
+    borderColor: 'border-slate-200',
+    badgeBg: 'bg-slate-100',
+    badgeText: 'text-slate-700',
+  },
   // Behavioral tracking
   BEHAVIOR: {
     label: 'Behavior',
@@ -191,7 +201,7 @@ export const ENTRY_TYPE_CONFIG = {
 export const ENTRY_TYPE_CATEGORIES = {
   'Quick Log': ['INCIDENT', 'SUCCESS'],
   'Core': ['MILESTONE', 'NOTE', 'LIKE', 'DISLIKE'],
-  'Professional': ['MEDICAL', 'EDUCATIONAL', 'THERAPY', 'SCHOOL_REPORT'],
+  'Professional': ['MEDICAL', 'EDUCATIONAL', 'THERAPY', 'SCHOOL_REPORT', 'CORRESPONDENCE'],
   'Tracking': ['BEHAVIOR', 'SENSORY', 'COMMUNICATION', 'SOCIAL'],
 } as const;
 

@@ -16,6 +16,7 @@ import { HistoryModal } from '@/components/HistoryModal';
 import { SectionEditor } from '@/components/passport/SectionEditor';
 import { PassportHistoryModal } from '@/components/passport/PassportHistoryModal';
 import { TimelineEntryForm } from '@/components/timeline/TimelineEntryForm';
+import { CorrespondenceForm } from '@/components/timeline/CorrespondenceForm';
 import { QuickLogButtons } from '@/components/timeline/QuickLogButtons';
 import { TimelineCalendar } from '@/components/timeline/TimelineCalendar';
 import { TimelineFilters } from '@/components/timeline/TimelineFilters';
@@ -33,7 +34,7 @@ import {
   MdSearch, MdBookmark, MdBookmarkBorder,
   MdCelebration, MdFlag, MdNotes, MdMedicalServices, MdSchool,
   MdThumbDown, MdPsychology, MdAssignment, MdMood, MdSensors,
-  MdRecordVoiceOver, MdGroups
+  MdRecordVoiceOver, MdGroups, MdMail, MdAttachFile
 } from 'react-icons/md';
 import toast from 'react-hot-toast';
 
@@ -59,6 +60,7 @@ const timelineEntryIcons: Record<string, React.ReactNode> = {
   EDUCATIONAL: <MdSchool className="w-4 h-4" />,
   THERAPY: <MdPsychology className="w-4 h-4" />,
   SCHOOL_REPORT: <MdAssignment className="w-4 h-4" />,
+  CORRESPONDENCE: <MdMail className="w-4 h-4" />,
   BEHAVIOR: <MdMood className="w-4 h-4" />,
   SENSORY: <MdSensors className="w-4 h-4" />,
   COMMUNICATION: <MdRecordVoiceOver className="w-4 h-4" />,
@@ -97,12 +99,15 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
   const [selectedTypes, setSelectedTypes] = useState<EntryType[]>([]);
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [showEntryForm, setShowEntryForm] = useState(false);
+  const [showCorrespondenceForm, setShowCorrespondenceForm] = useState(false);
   const [entryFormPreset, setEntryFormPreset] = useState<EntryType | undefined>();
   const [editingEntry, setEditingEntry] = useState<TimelineEntry | undefined>();
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
+  const [expandedAttachments, setExpandedAttachments] = useState<Set<string>>(new Set());
+  const [entryAttachments, setEntryAttachments] = useState<Record<string, any[]>>({});
   const [flagPopoverEntryId, setFlagPopoverEntryId] = useState<string | null>(null);
   const [flagDueDate, setFlagDueDate] = useState('');
 
@@ -330,6 +335,57 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
       loadTimeline();
     } catch (err) {
       toast.error('Failed to delete entry');
+    }
+  };
+
+  const handleToggleAttachments = async (entryId: string) => {
+    if (!currentPassport) return;
+    const isExpanded = expandedAttachments.has(entryId);
+
+    if (isExpanded) {
+      // Collapse
+      setExpandedAttachments(prev => {
+        const next = new Set(prev);
+        next.delete(entryId);
+        return next;
+      });
+    } else {
+      // Expand and load attachments if not already loaded
+      setExpandedAttachments(prev => new Set(prev).add(entryId));
+
+      if (!entryAttachments[entryId]) {
+        try {
+          const docs = await import('@/lib/api').then(m => m.documentApi.getForTimelineEntry(currentPassport.id, entryId));
+          setEntryAttachments(prev => ({ ...prev, [entryId]: docs }));
+        } catch {
+          toast.error('Failed to load attachments');
+        }
+      }
+    }
+  };
+
+  const handleDownloadAttachment = async (doc: any) => {
+    if (!currentPassport) return;
+    try {
+      const { downloadUrl } = await import('@/lib/api').then(m => m.documentApi.getDownloadUrl(currentPassport.id, doc.id));
+
+      // If it's a relative API URL (local storage), download via authenticated fetch
+      if (downloadUrl.startsWith('/api/')) {
+        const blob = await import('@/lib/api').then(m => m.documentApi.downloadFile(currentPassport.id, doc.id));
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.originalFileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        // S3 pre-signed URL, open directly
+        window.open(downloadUrl, '_blank');
+      }
+    } catch {
+      toast.error('Failed to download attachment');
     }
   };
 
@@ -628,6 +684,10 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
                   <MdAdd className="w-5 h-5" />
                   Add Entry
                 </Button>
+                <Button onClick={() => setShowCorrespondenceForm(true)} variant="outline" className="flex items-center gap-2">
+                  <MdMail className="w-5 h-5" />
+                  Add Email
+                </Button>
               </div>
             </div>
 
@@ -773,7 +833,13 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-baseline gap-2 flex-wrap">
                                       <h4 className="font-semibold text-gray-900">
-                                        {highlightText(entry.title, searchQuery)}
+                                        {entry.entryType === 'CORRESPONDENCE' && entry.metadata ? (
+                                          <>
+                                            {String(entry.metadata.from || 'Unknown')} mails {String(entry.metadata.to || currentPassport?.childFirstName || 'recipient')}: {String(entry.metadata.subject)}
+                                          </>
+                                        ) : (
+                                          highlightText(entry.title, searchQuery)
+                                        )}
                                       </h4>
                                       <time className="text-xs text-gray-400 whitespace-nowrap" dateTime={entry.entryDate}>
                                         {new Date(entry.entryDate).toLocaleDateString()}
@@ -787,6 +853,13 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
                                         </span>
                                       )}
                                     </div>
+                                    {entry.entryType === 'CORRESPONDENCE' && entry.metadata && (
+                                      <div className="mt-1 text-xs text-gray-500 space-y-0.5">
+                                        <div><strong>From:</strong> {String(entry.metadata.from)}</div>
+                                        {entry.metadata.to ? <div><strong>To:</strong> {String(entry.metadata.to)}</div> : null}
+                                        <div><strong>Source:</strong> {entry.metadata.source === 'WEBHOOK' ? 'Email' : 'Manual Entry'}</div>
+                                      </div>
+                                    )}
                                     {entry.content && (
                                       <p className="mt-1 text-sm text-gray-500 font-normal leading-relaxed">
                                         {highlightText(displayContent, searchQuery)}
@@ -803,6 +876,39 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
                                       >
                                         {isExpanded ? 'Show less' : 'Show more'}
                                       </button>
+                                    )}
+                                    {entry.attachmentCount > 0 && (
+                                      <div className="mt-2">
+                                        <button
+                                          onClick={() => handleToggleAttachments(entry.id)}
+                                          className="flex items-center gap-1 text-xs text-purple-700 hover:text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-600 rounded"
+                                        >
+                                          <MdAttachFile className="w-4 h-4" />
+                                          <span>{entry.attachmentCount} attachment{entry.attachmentCount !== 1 ? 's' : ''}</span>
+                                          {expandedAttachments.has(entry.id) ? <MdExpandLess className="w-4 h-4" /> : <MdExpandMore className="w-4 h-4" />}
+                                        </button>
+                                        {expandedAttachments.has(entry.id) && (
+                                          <div className="mt-2 space-y-1 pl-5">
+                                            {entryAttachments[entry.id] ? (
+                                              entryAttachments[entry.id].map((doc: any) => (
+                                                <button
+                                                  key={doc.id}
+                                                  onClick={() => handleDownloadAttachment(doc)}
+                                                  className="flex items-center gap-2 text-xs text-gray-700 hover:text-purple-700 hover:bg-purple-50 px-2 py-1 rounded transition-colors w-full text-left"
+                                                >
+                                                  <MdDescription className="w-4 h-4 flex-shrink-0" />
+                                                  <span className="truncate">{doc.originalFileName}</span>
+                                                  <span className="text-gray-400 ml-auto flex-shrink-0">
+                                                    {(doc.fileSize / 1024).toFixed(1)} KB
+                                                  </span>
+                                                </button>
+                                              ))
+                                            ) : (
+                                              <div className="text-xs text-gray-500 px-2 py-1">Loading...</div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
                                   <div className="flex flex-col items-end flex-shrink-0">
@@ -893,7 +999,10 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
         )}
 
         {activeTab === 'documents' && (
-          <DocumentsTab passportId={currentPassport.id} />
+          <DocumentsTab
+            passportId={currentPassport.id}
+            onAddEmail={() => setShowCorrespondenceForm(true)}
+          />
         )}
 
         {activeTab === 'sharing' && (
@@ -942,6 +1051,14 @@ export default function PassportDetailPage({ params }: { params: Promise<{ id: s
         onSuccess={loadTimeline}
         presetType={entryFormPreset}
         editEntry={editingEntry}
+      />
+
+      {/* Correspondence Form Modal */}
+      <CorrespondenceForm
+        passportId={currentPassport.id}
+        isOpen={showCorrespondenceForm}
+        onClose={() => setShowCorrespondenceForm(false)}
+        onSuccess={loadTimeline}
       />
     </main>
   );

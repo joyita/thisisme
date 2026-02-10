@@ -6,16 +6,17 @@ import { documentApi, Document, DocumentListResponse } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import {
   MdAdd, MdDescription, MdDelete, MdDownload, MdClose,
-  MdUploadFile, MdInsertDriveFile, MdPictureAsPdf, MdImage
+  MdUploadFile, MdInsertDriveFile, MdPictureAsPdf, MdImage, MdMail
 } from 'react-icons/md';
 import { AlertCircle, FileText, File } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface DocumentsTabProps {
   passportId: string;
+  onAddEmail?: () => void;
 }
 
-export function DocumentsTab({ passportId }: DocumentsTabProps) {
+export function DocumentsTab({ passportId, onAddEmail }: DocumentsTabProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -58,7 +59,22 @@ export function DocumentsTab({ passportId }: DocumentsTabProps) {
   const handleDownload = async (doc: Document) => {
     try {
       const { downloadUrl } = await documentApi.getDownloadUrl(passportId, doc.id);
-      window.open(downloadUrl, '_blank');
+
+      // If it's a relative API URL (local storage), download via authenticated fetch
+      if (downloadUrl.startsWith('/api/')) {
+        const blob = await documentApi.downloadFile(passportId, doc.id);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.originalFileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        // S3 pre-signed URL, open directly
+        window.open(downloadUrl, '_blank');
+      }
     } catch (err) {
       toast.error('Failed to download document');
     }
@@ -117,14 +133,27 @@ export function DocumentsTab({ passportId }: DocumentsTabProps) {
             </p>
           )}
         </div>
-        <Button
-          onClick={() => setShowUploadModal(true)}
-          className="flex items-center gap-2"
-          aria-label="Upload new document"
-        >
-          <MdAdd className="w-5 h-5" aria-hidden="true" />
-          Upload
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center gap-2"
+            aria-label="Upload new document"
+          >
+            <MdAdd className="w-5 h-5" aria-hidden="true" />
+            Upload
+          </Button>
+          {onAddEmail && (
+            <Button
+              onClick={onAddEmail}
+              variant="outline"
+              className="flex items-center gap-2"
+              aria-label="Add email correspondence"
+            >
+              <MdMail className="w-5 h-5" aria-hidden="true" />
+              Add Email
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Storage Bar */}
@@ -171,8 +200,8 @@ export function DocumentsTab({ passportId }: DocumentsTabProps) {
                   {getFileIcon(doc.mimeType)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-gray-900 truncate" title={doc.fileName}>
-                    {doc.fileName}
+                  <h4 className="font-medium text-gray-900 truncate" title={doc.originalFileName}>
+                    {doc.originalFileName}
                   </h4>
                   <p className="text-sm text-gray-500">
                     {formatFileSize(doc.fileSize)} &middot; {formatDate(doc.uploadedAt)}
@@ -184,7 +213,7 @@ export function DocumentsTab({ passportId }: DocumentsTabProps) {
                   type="button"
                   onClick={() => handleDownload(doc)}
                   className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-sm text-purple-700 bg-purple-50 rounded-md hover:bg-purple-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600"
-                  aria-label={`Download ${doc.fileName}`}
+                  aria-label={`Download ${doc.originalFileName}`}
                 >
                   <MdDownload className="w-4 h-4" aria-hidden="true" />
                   Download
@@ -193,7 +222,7 @@ export function DocumentsTab({ passportId }: DocumentsTabProps) {
                   type="button"
                   onClick={() => handleDelete(doc.id)}
                   className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
-                  aria-label={`Delete ${doc.fileName}`}
+                  aria-label={`Delete ${doc.originalFileName}`}
                 >
                   <MdDelete className="w-4 h-4" />
                 </button>

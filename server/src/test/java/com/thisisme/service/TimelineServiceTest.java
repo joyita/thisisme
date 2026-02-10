@@ -97,6 +97,7 @@ class TimelineServiceTest {
             VisibilityLevel.PROFESSIONALS,
             null,
             Set.of("development", "motor-skills"),
+            null,
             null
         );
 
@@ -135,6 +136,7 @@ class TimelineServiceTest {
             "Test",
             "Content",
             LocalDate.now(),
+            null,
             null,
             null,
             null,
@@ -260,6 +262,7 @@ class TimelineServiceTest {
             null,
             null,
             true,
+            null,
             null
         );
 
@@ -289,7 +292,7 @@ class TimelineServiceTest {
         ReflectionTestUtils.setField(otherUser, "id", UUID.randomUUID());
 
         UpdateTimelineEntryRequest request = new UpdateTimelineEntryRequest(
-            "Updated", null, null, null, null, null, null, null, null
+            "Updated", null, null, null, null, null, null, null, null, null
         );
 
         when(timelineRepository.findById(testEntry.getId())).thenReturn(Optional.of(testEntry));
@@ -448,5 +451,81 @@ class TimelineServiceTest {
         assertThrows(ResourceNotFoundException.class, () ->
             timelineService.getEntry(testEntry.getId(), testUser.getId(), "192.168.1.1")
         );
+    }
+
+    @Test
+    void createCorrespondenceEntry_ShouldCreateEntryWithMetadata() {
+        when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
+        when(permissionEvaluator.canAddTimelineEntries(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.getRole(testPassport.getId(), testUser.getId())).thenReturn(Role.OWNER);
+        when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
+        when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> {
+            TimelineEntry e = i.getArgument(0);
+            ReflectionTestUtils.setField(e, "id", UUID.randomUUID());
+            ReflectionTestUtils.setField(e, "createdAt", java.time.Instant.now());
+            ReflectionTestUtils.setField(e, "updatedAt", java.time.Instant.now());
+            return e;
+        });
+
+        TimelineEntryResponse result = timelineService.createCorrespondenceEntry(
+            testPassport.getId(),
+            testUser.getId(),
+            "teacher@school.com",
+            "parent@example.com",
+            "IEP Meeting Discussion",
+            "We need to schedule the annual IEP review...",
+            LocalDate.now(),
+            "MANUAL",
+            VisibilityLevel.OWNERS_ONLY,
+            null,
+            Set.of("iep", "school"),
+            "192.168.1.1"
+        );
+
+        assertNotNull(result);
+        assertEquals("IEP Meeting Discussion", result.title());
+        assertEquals(EntryType.CORRESPONDENCE, result.entryType());
+        assertEquals(VisibilityLevel.OWNERS_ONLY, result.visibilityLevel());
+        assertNotNull(result.metadata());
+        assertEquals("teacher@school.com", result.metadata().get("from"));
+        assertEquals("parent@example.com", result.metadata().get("to"));
+        assertEquals("MANUAL", result.metadata().get("source"));
+        assertTrue(result.tags().contains("iep"));
+
+        verify(timelineRepository).save(any(TimelineEntry.class));
+    }
+
+    @Test
+    void createCorrespondenceEntry_ShouldDefaultToOwnersOnlyVisibility() {
+        when(passportRepository.findActiveById(testPassport.getId())).thenReturn(Optional.of(testPassport));
+        when(permissionEvaluator.canAddTimelineEntries(testPassport.getId(), testUser.getId())).thenReturn(true);
+        when(permissionEvaluator.getRole(testPassport.getId(), testUser.getId())).thenReturn(Role.OWNER);
+        when(userRepository.findById(testUser.getId())).thenReturn(Optional.of(testUser));
+        when(timelineRepository.save(any(TimelineEntry.class))).thenAnswer(i -> {
+            TimelineEntry e = i.getArgument(0);
+            ReflectionTestUtils.setField(e, "id", UUID.randomUUID());
+            ReflectionTestUtils.setField(e, "createdAt", java.time.Instant.now());
+            ReflectionTestUtils.setField(e, "updatedAt", java.time.Instant.now());
+            return e;
+        });
+
+        TimelineEntryResponse result = timelineService.createCorrespondenceEntry(
+            testPassport.getId(),
+            testUser.getId(),
+            "sender@example.com",
+            null,
+            "Subject",
+            null,
+            LocalDate.now(),
+            "WEBHOOK",
+            null,
+            null,
+            null,
+            "192.168.1.1"
+        );
+
+        assertNotNull(result);
+        assertEquals(VisibilityLevel.OWNERS_ONLY, result.visibilityLevel());
+        assertEquals("WEBHOOK", result.metadata().get("source"));
     }
 }

@@ -19,6 +19,7 @@ public enum EntryType {
     EDUCATIONAL,
     THERAPY,
     SCHOOL_REPORT,
+    CORRESPONDENCE,
 
     // Behavioral tracking
     BEHAVIOR,

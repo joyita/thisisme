@@ -92,6 +92,20 @@ public class DocumentController {
         return ResponseEntity.ok(Map.of("downloadUrl", url));
     }
 
+    @GetMapping("/{documentId}/file")
+    public ResponseEntity<byte[]> downloadFile(
+            @PathVariable UUID passportId,
+            @PathVariable UUID documentId,
+            @AuthenticationPrincipal UserPrincipal principal,
+            HttpServletRequest httpRequest) throws IOException {
+
+        return documentService.downloadFile(
+            documentId,
+            principal.id(),
+            getClientIp(httpRequest)
+        );
+    }
+
     @DeleteMapping("/{documentId}")
     public ResponseEntity<Void> deleteDocument(
             @PathVariable UUID passportId,

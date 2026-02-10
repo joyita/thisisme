@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   MdClose, MdWarning, MdCelebration, MdFlag, MdNotes, MdMedicalServices, MdSchool,
   MdFavorite, MdThumbDown, MdPsychology, MdAssignment, MdMood, MdSensors,
-  MdRecordVoiceOver, MdGroups
+  MdRecordVoiceOver, MdGroups, MdMail
 } from 'react-icons/md';
 import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
@@ -40,6 +40,7 @@ const entryTypeIcons: Record<EntryType, React.ReactNode> = {
   EDUCATIONAL: <MdSchool className="w-5 h-5" />,
   THERAPY: <MdPsychology className="w-5 h-5" />,
   SCHOOL_REPORT: <MdAssignment className="w-5 h-5" />,
+  CORRESPONDENCE: <MdMail className="w-5 h-5" />,
   // Behavioral tracking
   BEHAVIOR: <MdMood className="w-5 h-5" />,
   SENSORY: <MdSensors className="w-5 h-5" />,

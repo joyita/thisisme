@@ -50,6 +50,9 @@ app:
     from: ${APP_EMAIL_FROM:noreply@thisisme.app}
     from-name: ${APP_EMAIL_FROM_NAME:ThisIsMe}
 
+  webhook:
+    secret: ${WEBHOOK_SECRET:changeme-webhook-secret-for-production}
+
   frontend:
     url: ${APP_FRONTEND_URL:http://localhost:3000}
 

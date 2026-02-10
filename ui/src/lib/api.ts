@@ -297,6 +297,28 @@ export const timelineApi = {
     });
   },
 
+  async createCorrespondence(passportId: string, correspondence: CreateCorrespondence) {
+    return apiRequest<TimelineEntry>(`/api/v1/passports/${passportId}/timeline`, {
+      method: 'POST',
+      body: JSON.stringify({
+        entryType: 'CORRESPONDENCE',
+        title: correspondence.subject,
+        content: correspondence.body,
+        entryDate: correspondence.date,
+        visibilityLevel: correspondence.visibilityLevel || 'OWNERS_ONLY',
+        visibleToRoles: correspondence.visibleToRoles,
+        tags: correspondence.tags,
+        metadata: {
+          from: correspondence.from,
+          to: correspondence.to,
+          subject: correspondence.subject,
+          date: correspondence.date,
+          source: 'MANUAL',
+        },
+      }),
+    });
+  },
+
   async update(passportId: string, entryId: string, updates: CreateTimelineEntry) {
     return apiRequest<TimelineEntry>(`/api/v1/passports/${passportId}/timeline/${entryId}`, {
       method: 'PUT',
@@ -359,6 +381,24 @@ export const documentApi = {
     return apiRequest<{ downloadUrl: string }>(
       `/api/v1/passports/${passportId}/documents/${documentId}/download`
     );
+  },
+
+  async downloadFile(passportId: string, documentId: string) {
+    const t = getTokens();
+    const response = await fetch(`${API_BASE}/api/v1/passports/${passportId}/documents/${documentId}/file`, {
+      method: 'GET',
+      headers: t ? { Authorization: `Bearer ${t.accessToken}` } : {},
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, 'Download failed');
+    }
+
+    return response.blob();
+  },
+
+  async getForTimelineEntry(passportId: string, entryId: string) {
+    return apiRequest<Document[]>(`/api/v1/passports/${passportId}/documents/timeline/${entryId}`);
   },
 
   async delete(passportId: string, documentId: string) {
@@ -600,7 +640,7 @@ export interface TimelineEntry {
   id: string;
   passportId: string;
   author: { id: string; name: string; role: string };
-  entryType: 'INCIDENT' | 'LIKE' | 'DISLIKE' | 'MILESTONE' | 'SUCCESS' | 'NOTE' | 'MEDICAL' | 'EDUCATIONAL' | 'THERAPY' | 'SCHOOL_REPORT' | 'BEHAVIOR' | 'SENSORY' | 'COMMUNICATION' | 'SOCIAL';
+  entryType: 'INCIDENT' | 'LIKE' | 'DISLIKE' | 'MILESTONE' | 'SUCCESS' | 'NOTE' | 'MEDICAL' | 'EDUCATIONAL' | 'THERAPY' | 'SCHOOL_REPORT' | 'CORRESPONDENCE' | 'BEHAVIOR' | 'SENSORY' | 'COMMUNICATION' | 'SOCIAL';
   title: string;
   content: string;
   entryDate: string;
@@ -613,6 +653,7 @@ export interface TimelineEntry {
   flaggedForFollowup: boolean;
   followupDueDate?: string;
   mentionedUserIds: string[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface CreateTimelineEntry {
@@ -623,6 +664,18 @@ export interface CreateTimelineEntry {
   visibilityLevel?: string;
   tags?: string[];
   mentionedUserIds?: string[];
+}
+
+export interface CreateCorrespondence {
+  from: string;
+  to?: string;
+  date: string;
+  subject: string;
+  body?: string;
+  visibilityLevel?: string;
+  visibleToRoles?: string[];
+  tags?: string[];
+  attachmentIds?: string[];
 }
 
 export interface PassportCollaborator {

@@ -13,11 +13,15 @@ import java.util.UUID;
 @Repository
 public interface DocumentRepository extends JpaRepository<Document, UUID> {
 
-    @Query("SELECT d FROM Document d WHERE d.passport.id = :passportId " +
+    @Query("SELECT d FROM Document d " +
+           "JOIN FETCH d.uploadedBy " +
+           "WHERE d.passport.id = :passportId " +
            "AND d.deletedAt IS NULL ORDER BY d.uploadedAt DESC")
     List<Document> findByPassportId(@Param("passportId") UUID passportId);
 
-    @Query("SELECT d FROM Document d WHERE d.timelineEntry.id = :entryId " +
+    @Query("SELECT d FROM Document d " +
+           "JOIN FETCH d.uploadedBy " +
+           "WHERE d.timelineEntry.id = :entryId " +
            "AND d.deletedAt IS NULL")
     List<Document> findByTimelineEntryId(@Param("entryId") UUID entryId);
 

@@ -43,6 +43,7 @@ export type EntryType =
   | 'EDUCATIONAL'
   | 'THERAPY'
   | 'SCHOOL_REPORT'
+  | 'CORRESPONDENCE'
   // Behavioral tracking
   | 'BEHAVIOR'
   | 'SENSORY'
