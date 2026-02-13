@@ -1,7 +1,7 @@
 // src/app/auth/register/page.tsx
 'use client';
 
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -10,6 +10,14 @@ import { MdFace } from 'react-icons/md';
 import { inviteApi } from '@/lib/api';
 
 export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { register, isLoading, error, clearError } = useAuth();
