@@ -7,6 +7,7 @@ Inspired by Pupil Passports, and the need to harmonise often fragmented care.
 
 - **Pupil Passports** -- Profile sections for loves, difficulties, strengths, and needs
 - **Timeline** -- Track incidents, milestones, successes, medical events, and observations
+- **Email Correspondence** -- Inbound email capture via webhooks, manual email logging, attachment storage
 - **Document Storage** -- Upload and manage medical records, assessments, and reports
 - **Secure Sharing** -- Password-protected, expiring links with granular section visibility
 - **Collaboration** -- Comments and reactions on timeline entries, multi-user access with role-based permissions
@@ -23,6 +24,7 @@ Inspired by Pupil Passports, and the need to harmonise often fragmented care.
 | OCR Service | FastAPI, PaddleOCR, sentence-transformers | 8081 |
 | Database | PostgreSQL 16 | 5432 |
 | Object Storage | MinIO (dev) / AWS S3 (prod) | 9000 |
+| CDN / Reverse Proxy | AWS CloudFront | 443 |
 
 ## Prerequisites
 
@@ -93,6 +95,60 @@ python main.py
 
 Runs on http://localhost:8081. Requires approximately 4 GB of memory for the ML models.
 
+## Email Correspondence System
+
+Inbound emails are captured as CORRESPONDENCE timeline entries via a webhook endpoint. Emails can also be logged manually through the frontend.
+
+### Inbound Email Flow
+
+```
+Cloudflare Email Routing
+  → Cloudflare Worker (parses email, base64-encodes attachments)
+    → CloudFront (HTTPS termination, custom domain)
+      → POST /api/v2/passports/{id}/correspondence/inbound
+        → TimelineEntry (type=CORRESPONDENCE) + Document attachments
+```
+
+### Webhook Endpoint
+
+`POST /api/v2/passports/{passportId}/correspondence/inbound`
+
+- **Auth:** `X-Webhook-Secret` header (no JWT required, endpoint is permit-all in Spring Security)
+- **Payload:**
+  ```json
+  {
+    "from": "sender@example.com",
+    "to": "recipient@example.com",
+    "subject": "Email subject",
+    "body": "Email body text",
+    "date": "2025-01-15",
+    "attachments": [
+      {
+        "filename": "report.pdf",
+        "contentType": "application/pdf",
+        "content": "<base64-encoded>"
+      }
+    ]
+  }
+  ```
+- **Response:** `CorrespondenceResponse` with `entryId`, source `"WEBHOOK"`, attachment count
+
+### CloudFront Setup
+
+CloudFront sits in front of the backend to provide HTTPS on a custom domain, required for external webhook sources (Cloudflare workers) to reach the API.
+
+- **ACM Certificate** (free, in `us-east-1`) for the custom domain
+- **CloudFront Distribution** with the backend server as origin
+- **DNS** CNAME or alias record pointing the domain to the CloudFront distribution
+- **Behavior:** Forward all headers, allow POST methods, no caching for API routes
+
+### Manual Email Entry
+
+The frontend provides a correspondence form (`ui/src/components/timeline/CorrespondenceForm.tsx`) with:
+- Smart email paste parser that extracts From/To/Subject/Date headers automatically
+- Visibility controls (Owners Only, Professionals, All, Custom)
+- Tag support (school, medical, therapy, iep, referral)
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -106,6 +162,11 @@ Runs on http://localhost:8081. Requires approximately 4 GB of memory for the ML 
 | `S3_SECRET_KEY` | `minioadmin123` | S3 secret key |
 | `S3_BUCKET` | `thisisme-documents` | S3 bucket name |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | Backend URL for frontend |
+| `WEBHOOK_SECRET` | dev secret | Shared secret for email webhook auth |
+| `APP_EMAIL_FROM` | `noreply@thisisme.app` | Outbound email from address |
+| `APP_EMAIL_FROM_NAME` | `ThisIsMe` | Outbound email display name |
+| `CORS_ORIGINS` | `http://localhost:3000` | Allowed CORS origins |
+| `APP_FRONTEND_URL` | `http://localhost:3000` | Frontend URL (used in invitation emails) |
 
 ## Project Structure
 
@@ -172,6 +233,9 @@ thisisme/
 - `GET /share/:token/check` -- Check link status (public)
 - `POST /share/:token/verify` -- Verify password (public)
 - `GET /share/:token` -- Access shared passport (public)
+
+### Correspondence (Webhook)
+- `POST /api/v2/passports/:id/correspondence/inbound` -- Inbound email webhook (auth: `X-Webhook-Secret` header)
 
 ### Export
 - `GET /api/passports/:id/export/json`
